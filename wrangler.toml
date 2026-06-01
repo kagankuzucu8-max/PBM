@@ -4,6 +4,9 @@ main = "worker.js"
 keep_vars = true
 workers_dev = true
 
+[build]
+command = "npm --prefix frontend install --legacy-peer-deps --no-audit --no-fund && CI=false npm --prefix frontend run build"
+
 [assets]
 directory = "./frontend/build"
 binding = "ASSETS"

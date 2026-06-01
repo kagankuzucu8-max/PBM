@@ -1,11 +1,12 @@
 // Backend API wrapper
 import axios from "axios";
 import { supabase } from "@/lib/supabase";
+import { getRuntimeEnv } from "@/lib/runtimeEnv";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "";
-const FUNCTION_API = process.env.REACT_APP_API_BASE || (BACKEND_URL ? `${BACKEND_URL}/api` : "/api");
-const SUPABASE_URL = process.env.REACT_APP_SUPABASE_URL || "";
-const SUPABASE_ANON_KEY = process.env.REACT_APP_SUPABASE_ANON_KEY || "";
+const BACKEND_URL = getRuntimeEnv("REACT_APP_BACKEND_URL");
+const FUNCTION_API = getRuntimeEnv("REACT_APP_API_BASE") || (BACKEND_URL ? `${BACKEND_URL}/api` : "/api");
+const SUPABASE_URL = getRuntimeEnv("REACT_APP_SUPABASE_URL");
+const SUPABASE_ANON_KEY = getRuntimeEnv("REACT_APP_SUPABASE_ANON_KEY");
 export const API = FUNCTION_API;
 
 export const apiClient = axios.create({

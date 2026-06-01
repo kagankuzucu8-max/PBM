@@ -9,21 +9,25 @@ const ADMIN_DISPLAY_NAMES = {
 
 async function ensureUserBootstrap(user) {
   if (!user?.id) return;
-  await supabase.from("user_settings").upsert({
-    user_id: user.id,
-    default_timeframe: "1h",
-    default_market: "crypto",
-    theme: "light",
-  }, { onConflict: "user_id", ignoreDuplicates: true });
+  try {
+    await supabase.from("user_settings").upsert({
+      user_id: user.id,
+      default_timeframe: "1h",
+      default_market: "crypto",
+      theme: "light",
+    }, { onConflict: "user_id", ignoreDuplicates: true });
 
-  const { data: lists } = await supabase
-    .from("watchlists")
-    .select("id")
-    .eq("user_id", user.id)
-    .limit(1);
+    const { data: lists } = await supabase
+      .from("watchlists")
+      .select("id")
+      .eq("user_id", user.id)
+      .limit(1);
 
-  if (!lists || lists.length === 0) {
-    await supabase.from("watchlists").insert({ user_id: user.id, name: "My Watchlist" });
+    if (!lists || lists.length === 0) {
+      await supabase.from("watchlists").insert({ user_id: user.id, name: "My Watchlist" });
+    }
+  } catch {
+    // Login should not fail if optional first-run workspace bootstrap is blocked.
   }
 }
 
@@ -93,13 +97,13 @@ export function AuthProvider({ children }) {
   const signIn = async (email, password) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
     if (error) throw error;
-    if (data.user) await ensureUserBootstrap(data.user);
+    if (data.user) ensureUserBootstrap(data.user).catch(() => {});
     refreshAccount().catch(() => {});
   };
   const signUp = async (email, password) => {
     const { data, error } = await supabase.auth.signUp({ email: email.trim().toLowerCase(), password });
     if (error) throw error;
-    if (data.user) await ensureUserBootstrap(data.user);
+    if (data.user) ensureUserBootstrap(data.user).catch(() => {});
     refreshAccount().catch(() => {});
   };
   const signOut = async () => {

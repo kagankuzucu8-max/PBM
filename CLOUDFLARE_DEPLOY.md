@@ -1,8 +1,8 @@
-# PBM Cloudflare Pages Deploy
+# PBM Cloudflare Workers Deploy
 
-Bu dokuman Netlify credit sorununu ortadan kaldirmak icin PBM'i Cloudflare Pages + Pages Functions uzerinde calistirma ayarlaridir. Supabase ayni kalir; kullanici hesaplari ve datalar tasinmaz.
+Bu dokuman Netlify credit sorununu ortadan kaldirmak icin PBM'i Cloudflare Workers + Static Assets uzerinde calistirma ayarlaridir. Supabase ayni kalir; kullanici hesaplari ve datalar tasinmaz.
 
-## Cloudflare Pages ayarlari
+## Cloudflare Workers ayarlari
 
 - Framework preset: `Create React App` veya `None`
 - Root directory: bos birak veya repo root
@@ -12,13 +12,13 @@ Bu dokuman Netlify credit sorununu ortadan kaldirmak icin PBM'i Cloudflare Pages
 cd frontend && npm install --legacy-peer-deps --no-audit --no-fund && CI=false npm run build
 ```
 
-- Build output directory:
+- Deploy command:
 
 ```bash
-frontend/build
+npx wrangler deploy
 ```
 
-Cloudflare Functions klasoru repo root'taki `functions/` klasorudur. API endpoint artik:
+`wrangler.toml` frontend build dosyalarini `frontend/build` klasorunden Static Assets olarak yayinlar. API endpoint:
 
 ```text
 /api
@@ -29,6 +29,7 @@ Frontend varsayilan olarak `REACT_APP_API_BASE` yoksa `/api` kullanir.
 ## Environment variables
 
 Cloudflare Pages > Settings > Environment variables alanina bunlari gir:
+Cloudflare > Workers & Pages > PBM > Settings > Variables alaninda bu keyleri gir:
 
 ```text
 REACT_APP_SUPABASE_URL
@@ -75,7 +76,7 @@ https://SENIN-CLOUDFLARE-LINKIN/api/health
 Beklenen cevap:
 
 ```json
-{"status":"ok","service":"pbm-ai","runtime":"cloudflare-pages-functions"}
+{"status":"ok","service":"pbm-ai","runtime":"cloudflare-workers"}
 ```
 
 Tasarim/palet/chart/AI ekranlari bu tasima ile degismez.

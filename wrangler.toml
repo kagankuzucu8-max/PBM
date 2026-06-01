@@ -1,0 +1,6 @@
+name = "pbm-marketdesk"
+compatibility_date = "2026-05-31"
+pages_build_output_dir = "frontend/build"
+
+[vars]
+PBM_RUNTIME = "cloudflare-pages-functions"

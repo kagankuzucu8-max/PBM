@@ -26,6 +26,10 @@ npx wrangler deploy
 
 Frontend varsayilan olarak `REACT_APP_API_BASE` yoksa `/api` kullanir.
 
+Not: `wrangler.toml` icinde `keep_vars = true` vardir. Bu, Cloudflare Dashboard'da girdigin Supabase/Claude/Twelve Data env keylerini deploy sirasinda silmemesi icindir.
+
+Not: `frontend/public/_redirects` dosyasindaki eski Netlify SPA rewrite kurali etkisizdir. SPA fallback Cloudflare Workers tarafinda `not_found_handling = "single-page-application"` ile yapilir.
+
 ## Environment variables
 
 Cloudflare Pages > Settings > Environment variables alanina bunlari gir:

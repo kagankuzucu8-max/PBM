@@ -15,12 +15,12 @@ cd frontend && npm install --legacy-peer-deps --no-audit --no-fund && CI=false n
 - Deploy command:
 
 ```bash
-npx wrangler deploy
+npm --prefix frontend install --legacy-peer-deps --no-audit --no-fund && CI=false npm --prefix frontend run build && npx wrangler deploy
 ```
 
 `wrangler.toml` frontend build dosyalarini `frontend/build` klasorunden Static Assets olarak yayinlar. API endpoint:
 
-Not: Cloudflare bazen paneldeki build command'i kosmadan direkt deploy command'e gecebilir. Bu yuzden frontend build adimi `wrangler.toml` icindeki `[build]` alanina da yazildi. Deploy command sadece `npx wrangler deploy` kalsa bile Wrangler once React build'i uretir, sonra `frontend/build` klasorunu publish eder.
+Not: Cloudflare bazen paneldeki build command'i kosmadan direkt deploy command'e gecebilir. Bu yuzden deploy command tek satirda install + build + deploy yapacak sekilde yazilmalidir. `frontend/build does not exist` hatasini bitiren ayar budur.
 
 ```text
 /api

@@ -9,30 +9,44 @@ if (!url || !anon) {
   console.warn("[supabase] Missing REACT_APP_SUPABASE_URL or REACT_APP_SUPABASE_ANON_KEY");
 }
 
-const cachedBodyFetch = async (...args) => {
+const replayableBodyFetch = async (...args) => {
   const response = await fetch(...args);
-  let textPromise = null;
-  const readText = () => {
-    if (!textPromise) textPromise = response.clone().text();
-    return textPromise;
+  const body = await response.arrayBuffer();
+  const init = {
+    status: response.status,
+    statusText: response.statusText,
+    headers: new Headers(response.headers),
   };
-  Object.defineProperty(response, "text", {
+  const bodyCopy = () => body.slice(0);
+  const textFromBody = () => new TextDecoder().decode(bodyCopy());
+  const makeResponse = () => new Response(bodyCopy(), init);
+  const replayable = makeResponse();
+
+  Object.defineProperty(replayable, "clone", {
     configurable: true,
-    value: readText,
+    value: makeResponse,
   });
-  Object.defineProperty(response, "json", {
+  Object.defineProperty(replayable, "arrayBuffer", {
+    configurable: true,
+    value: async () => bodyCopy(),
+  });
+  Object.defineProperty(replayable, "text", {
+    configurable: true,
+    value: async () => textFromBody(),
+  });
+  Object.defineProperty(replayable, "json", {
     configurable: true,
     value: async () => {
-      const text = await readText();
+      const text = textFromBody();
       return text ? JSON.parse(text) : null;
     },
   });
-  return response;
+  return replayable;
 };
 
 export const supabase = createClient(url || "https://example.supabase.co", anon || "missing-anon-key", {
   global: {
-    fetch: cachedBodyFetch,
+    fetch: replayableBodyFetch,
   },
   auth: {
     persistSession: true,

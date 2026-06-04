@@ -3,6 +3,8 @@ import { getRuntimeEnv } from "@/lib/runtimeEnv";
 
 const url = getRuntimeEnv("REACT_APP_SUPABASE_URL");
 const anon = getRuntimeEnv("REACT_APP_SUPABASE_ANON_KEY");
+const projectRef = url ? new URL(url).hostname.split(".")[0] : "missing-project";
+const storageKey = `sb-${projectRef}-auth-token`;
 
 if (!url || !anon) {
   // eslint-disable-next-line no-console
@@ -14,9 +16,11 @@ export const supabase = createClient(url || "https://example.supabase.co", anon 
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
+    storageKey,
   },
 });
 
 export const SUPABASE_URL = url;
 export const SUPABASE_ANON_KEY = anon;
+export const SUPABASE_STORAGE_KEY = storageKey;
 export const SUPABASE_CONFIGURED = Boolean(url && anon);

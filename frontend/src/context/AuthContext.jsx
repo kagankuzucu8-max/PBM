@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { SUPABASE_ANON_KEY, SUPABASE_URL, supabase } from "@/lib/supabase";
+import { SUPABASE_ANON_KEY, SUPABASE_STORAGE_KEY, SUPABASE_URL, supabase } from "@/lib/supabase";
 import { getAccountStatus } from "@/lib/api";
 
 const AuthContext = createContext(null);
@@ -34,6 +34,44 @@ async function ensureUserBootstrap(user) {
 const isBodyStreamError = (error) =>
   /body stream|body is already|already read|already used/i.test(String(error?.message || error || ""));
 
+function parseJwtPayload(token) {
+  try {
+    const [, payload] = token.split(".");
+    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+    return JSON.parse(atob(padded));
+  } catch {
+    return {};
+  }
+}
+
+function buildDirectSession(body, email) {
+  const payload = parseJwtPayload(body.access_token);
+  const now = Math.floor(Date.now() / 1000);
+  const expiresAt = body.expires_at || payload.exp || now + (body.expires_in || 3600);
+  return {
+    access_token: body.access_token,
+    refresh_token: body.refresh_token,
+    token_type: body.token_type || "bearer",
+    expires_in: body.expires_in || Math.max(expiresAt - now, 0),
+    expires_at: expiresAt,
+    user: body.user || {
+      id: payload.sub,
+      aud: payload.aud || "authenticated",
+      role: payload.role || "authenticated",
+      email,
+    },
+  };
+}
+
+function persistDirectSession(session) {
+  if (typeof window === "undefined" || !window.localStorage) return;
+  window.localStorage.setItem(SUPABASE_STORAGE_KEY, JSON.stringify(session));
+  if (session.user) {
+    window.localStorage.setItem(`${SUPABASE_STORAGE_KEY}-user`, JSON.stringify(session.user));
+  }
+}
+
 async function directPasswordSignIn(email, password) {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
     throw new Error("Supabase env vars are missing");
@@ -59,12 +97,19 @@ async function directPasswordSignIn(email, password) {
   if (!body?.access_token || !body?.refresh_token) {
     throw new Error("Supabase did not return a session");
   }
-  const { data, error } = await supabase.auth.setSession({
-    access_token: body.access_token,
-    refresh_token: body.refresh_token,
-  });
-  if (error) throw error;
-  return { data: data || { session: body, user: body.user }, error: null };
+  const directSession = buildDirectSession(body, email);
+  try {
+    const { data, error } = await supabase.auth.setSession({
+      access_token: body.access_token,
+      refresh_token: body.refresh_token,
+    });
+    if (!error) return { data: data || { session: directSession, user: directSession.user }, error: null };
+    if (!isBodyStreamError(error)) throw error;
+  } catch (error) {
+    if (!isBodyStreamError(error)) throw error;
+  }
+  persistDirectSession(directSession);
+  return { data: { session: directSession, user: directSession.user }, error: null };
 }
 
 export function AuthProvider({ children }) {
@@ -139,8 +184,13 @@ export function AuthProvider({ children }) {
       if (!isBodyStreamError(error)) throw error;
       result = await directPasswordSignIn(cleanEmail, password);
     }
+    if (isBodyStreamError(result?.error)) {
+      result = await directPasswordSignIn(cleanEmail, password);
+    }
     const { data, error } = result;
     if (error) throw error;
+    if (data.session) setSession(data.session);
+    if (data.user) setUser(data.user);
     if (data.user) ensureUserBootstrap(data.user).catch(() => {});
     refreshAccount().catch(() => {});
   };

@@ -133,6 +133,22 @@ const supabaseConfig = (hints = {}) => {
 const hasSupabaseServiceKey = () =>
   Boolean(getEnv("SUPABASE_SERVICE_ROLE_KEY") || getEnv("SUPABASE_SERVICE_KEY") || getEnv("SUPABASE_SERVICE_ROLE"));
 
+const decodeJwtPayload = (token) => {
+  try {
+    const payload = token.split(".")[1];
+    if (!payload) return null;
+    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+    const text =
+      typeof atob === "function"
+        ? atob(padded)
+        : Buffer.from(padded, "base64").toString("utf8");
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+};
+
 const supabaseAdminJson = async (path, options = {}) => {
   const { url, serviceKey, anonKey, key } = supabaseConfig(options.supabaseHints);
   const userToken = options.userToken;
@@ -168,18 +184,18 @@ const authenticatedUser = async (request) => {
   const token = auth.match(/^Bearer\s+(.+)$/i)?.[1];
   if (!token) throw httpError(401, "Sign in is required");
   const supabaseHints = supabaseHintsFromRequest(request);
-  const { url, key } = supabaseConfig(supabaseHints);
-  const response = await fetch(`${url}/auth/v1/user`, {
-    headers: {
-      apikey: key,
-      authorization: `Bearer ${token}`,
-    },
-  });
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok || !body?.id || !body?.email) {
-    throw httpError(401, body?.msg || body?.error_description || "Invalid session");
+  supabaseConfig(supabaseHints);
+  const claims = decodeJwtPayload(token);
+  const id = claims?.sub;
+  const email = String(claims?.email || claims?.user_metadata?.email || "").trim().toLowerCase();
+  const exp = Number(claims?.exp || 0);
+  if (!id || !email) {
+    throw httpError(401, "Invalid session");
   }
-  return { id: body.id, email: String(body.email).trim().toLowerCase(), token, supabaseHints };
+  if (exp && exp * 1000 < Date.now()) {
+    throw httpError(401, "Session expired");
+  }
+  return { id, email, token, supabaseHints };
 };
 
 const fetchBetaAccess = async (email, userToken, supabaseHints) => {

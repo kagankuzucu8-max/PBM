@@ -18,9 +18,9 @@ bos birak
 npx wrangler deploy
 ```
 
-`wrangler.toml` hazir static dosyalari `cloudflare-assets` klasorunden Static Assets olarak yayinlar. API endpoint:
+`wrangler.toml` hazir static dosyalari `frontend/build` klasorunden Static Assets olarak yayinlar. Bu pakette `frontend/build` hazir gelir; Cloudflare build komutu calistirmasa bile klasor vardir. API endpoint:
 
-Not: Cloudflare bazen paneldeki build command'i kosmadan direkt deploy command'e gecebilir. Bu pakette `cloudflare-assets` repoda hazir gelir; bu yuzden `frontend/build does not exist` hatasi bitmis olur.
+Not: Cloudflare bazen paneldeki build command'i kosmadan direkt deploy command'e gecebilir. Bu pakette `frontend/build` repoda hazir gelir; bu yuzden `frontend/build does not exist` hatasi bitmis olur.
 
 ```text
 /api

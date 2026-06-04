@@ -1,4 +1,4 @@
-import { handleRequest } from "./netlify/functions/pbm.mjs";
+import { handleRequest } from "./cloudflare/api.mjs";
 
 const corsHeaders = (request) => ({
   "content-type": "application/json; charset=utf-8",

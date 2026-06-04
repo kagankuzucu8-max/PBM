@@ -1,6 +1,6 @@
 # PBM Cloudflare Workers Deploy
 
-Bu dokuman Netlify credit sorununu ortadan kaldirmak icin PBM'i Cloudflare Workers + Static Assets uzerinde calistirma ayarlaridir. Supabase ayni kalir; kullanici hesaplari ve datalar tasinmaz.
+Bu dokuman PBM'i Cloudflare Workers + Static Assets uzerinde calistirma ayarlaridir. Supabase ayni kalir; kullanici hesaplari ve datalar tasinmaz.
 
 ## Cloudflare Workers ayarlari
 
@@ -9,18 +9,18 @@ Bu dokuman Netlify credit sorununu ortadan kaldirmak icin PBM'i Cloudflare Worke
 - Build command:
 
 ```bash
-cd frontend && npm install --legacy-peer-deps --no-audit --no-fund && CI=false npm run build
+bos birak
 ```
 
 - Deploy command:
 
 ```bash
-npm --prefix frontend install --legacy-peer-deps --no-audit --no-fund && CI=false npm --prefix frontend run build && npx wrangler deploy
+npx wrangler deploy
 ```
 
-`wrangler.toml` frontend build dosyalarini `frontend/build` klasorunden Static Assets olarak yayinlar. API endpoint:
+`wrangler.toml` hazir static dosyalari `cloudflare-assets` klasorunden Static Assets olarak yayinlar. API endpoint:
 
-Not: Cloudflare bazen paneldeki build command'i kosmadan direkt deploy command'e gecebilir. Bu yuzden deploy command tek satirda install + build + deploy yapacak sekilde yazilmalidir. `frontend/build does not exist` hatasini bitiren ayar budur.
+Not: Cloudflare bazen paneldeki build command'i kosmadan direkt deploy command'e gecebilir. Bu pakette `cloudflare-assets` repoda hazir gelir; bu yuzden `frontend/build does not exist` hatasi bitmis olur.
 
 ```text
 /api
@@ -30,7 +30,7 @@ Frontend varsayilan olarak `REACT_APP_API_BASE` yoksa `/api` kullanir.
 
 Not: `wrangler.toml` icinde `keep_vars = true` vardir. Bu, Cloudflare Dashboard'da girdigin Supabase/Claude/Twelve Data env keylerini deploy sirasinda silmemesi icindir.
 
-Not: `frontend/public/_redirects` dosyasindaki eski Netlify SPA rewrite kurali etkisizdir. SPA fallback Cloudflare Workers tarafinda `not_found_handling = "single-page-application"` ile yapilir.
+Not: SPA fallback Cloudflare Workers tarafinda `not_found_handling = "single-page-application"` ile yapilir.
 
 ## Environment variables
 

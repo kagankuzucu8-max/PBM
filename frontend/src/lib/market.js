@@ -1,7 +1,5 @@
-// Market data — proxied through our FastAPI backend to bypass browser CORS.
-// In production (Netlify), users may either:
-//   - keep the FastAPI backend running and set REACT_APP_BACKEND_URL accordingly, or
-//   - replace these endpoints with Netlify Functions / Supabase Edge Functions.
+// Market data is proxied through the PBM API layer to bypass browser CORS.
+// Cloudflare Workers handles these endpoints in production, with Supabase for persistence.
 import { apiClient } from "@/lib/api";
 
 export const TIMEFRAMES = [

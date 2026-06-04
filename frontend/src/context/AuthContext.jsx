@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { SUPABASE_ANON_KEY, SUPABASE_URL, supabase } from "@/lib/supabase";
 import { getAccountStatus } from "@/lib/api";
 
 const AuthContext = createContext(null);
@@ -29,6 +29,42 @@ async function ensureUserBootstrap(user) {
   } catch {
     // Login should not fail if optional first-run workspace bootstrap is blocked.
   }
+}
+
+const isBodyStreamError = (error) =>
+  /body stream|body is already|already read|already used/i.test(String(error?.message || error || ""));
+
+async function directPasswordSignIn(email, password) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    throw new Error("Supabase env vars are missing");
+  }
+  const response = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+    method: "POST",
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ email, password }),
+  });
+  const text = await response.text();
+  let body = null;
+  try {
+    body = text ? JSON.parse(text) : null;
+  } catch {
+    body = { message: text };
+  }
+  if (!response.ok) {
+    throw new Error(body?.error_description || body?.msg || body?.message || "Authentication failed");
+  }
+  if (!body?.access_token || !body?.refresh_token) {
+    throw new Error("Supabase did not return a session");
+  }
+  const { data, error } = await supabase.auth.setSession({
+    access_token: body.access_token,
+    refresh_token: body.refresh_token,
+  });
+  if (error) throw error;
+  return { data: data || { session: body, user: body.user }, error: null };
 }
 
 export function AuthProvider({ children }) {
@@ -95,7 +131,15 @@ export function AuthProvider({ children }) {
   }, [refreshAccount]);
 
   const signIn = async (email, password) => {
-    const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
+    const cleanEmail = email.trim().toLowerCase();
+    let result;
+    try {
+      result = await supabase.auth.signInWithPassword({ email: cleanEmail, password });
+    } catch (error) {
+      if (!isBodyStreamError(error)) throw error;
+      result = await directPasswordSignIn(cleanEmail, password);
+    }
+    const { data, error } = result;
     if (error) throw error;
     if (data.user) ensureUserBootstrap(data.user).catch(() => {});
     refreshAccount().catch(() => {});

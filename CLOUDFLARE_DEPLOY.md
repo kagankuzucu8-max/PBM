@@ -63,7 +63,7 @@ https://pbm.pages.dev
 
 ## Supabase SQL
 
-Admin yetkisini sadece `kaankuzucub@gmail.com` hesabina sabitlemek icin su dosyayi Supabase SQL Editor'de bir kere calistir:
+Admin yetkisini sadece `kagankuzucu8@gmail.com` hesabina sabitlemek icin su dosyayi Supabase SQL Editor'de bir kere calistir:
 
 ```text
 supabase_cloudflare_admin_fix_20260531/01_admin_only_permissions.sql

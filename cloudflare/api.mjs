@@ -13,7 +13,7 @@ const POPULAR_CRYPTO = [
 ];
 const POPULAR_FOREX = ["EURUSD", "GBPUSD", "USDJPY", "USDCHF", "AUDUSD", "USDCAD", "NZDUSD", "EURJPY"];
 const POPULAR_INDICES = ["SPX", "NDX", "DJI", "IXIC", "RUT", "DAX", "FTSE", "N225"];
-const ADMIN_EMAILS = new Set(["kaankuzucub@gmail.com"]);
+const ADMIN_EMAILS = new Set(["kagankuzucu8@gmail.com"]);
 const FOREX_CODES = new Set(["USD", "EUR", "GBP", "JPY", "AUD", "NZD", "CAD", "CHF", "TRY", "CNH", "SEK", "NOK", "DKK", "MXN", "ZAR"]);
 const INDEX_ALIASES = new Map([
   ["SPX", "SPX"],

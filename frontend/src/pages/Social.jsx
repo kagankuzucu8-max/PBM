@@ -277,7 +277,7 @@ export default function SocialPage() {
                       <div>
                         <div className="font-semibold tabular-nums text-zinc-950">{post.symbol}</div>
                         <div className="text-xs text-zinc-500 mt-0.5">
-                          {post.timeframe} / {post.author_nickname || (post.author_email === "kaankuzucub@gmail.com" ? CHANNEL_AUTHOR_NAME : "Trader")}
+                          {post.timeframe} / {post.author_nickname || (post.author_email === "kagankuzucu8@gmail.com" ? CHANNEL_AUTHOR_NAME : "Trader")}
                         </div>
                       </div>
                       <div className="flex items-center gap-2">

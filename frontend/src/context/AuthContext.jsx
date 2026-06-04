@@ -11,7 +11,7 @@ import { getAccountStatus } from "@/lib/api";
 
 const AuthContext = createContext(null);
 const ADMIN_DISPLAY_NAMES = {
-  "kaankuzucub@gmail.com": "kaanxbt",
+  "kagankuzucu8@gmail.com": "kaanxbt",
 };
 
 async function ensureUserBootstrap(user) {

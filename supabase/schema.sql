@@ -374,7 +374,7 @@ create policy "own insert social_posts"
       where lower(access.email) = lower(coalesce((select auth.jwt() ->> 'email'), ''))
         and access.status = 'active'
         and access.role = 'admin'
-        and lower(access.email) = 'kaankuzucub@gmail.com'
+        and lower(access.email) = 'kagankuzucu8@gmail.com'
     )
   );
 
@@ -417,7 +417,7 @@ create policy "own insert education_videos"
   to authenticated
   with check (
     (select auth.uid()) = user_id
-    and lower(coalesce((select auth.jwt() ->> 'email'), '')) = 'kaankuzucub@gmail.com'
+    and lower(coalesce((select auth.jwt() ->> 'email'), '')) = 'kagankuzucu8@gmail.com'
   );
 
 create policy "own update education_videos"
@@ -425,11 +425,11 @@ create policy "own update education_videos"
   to authenticated
   using (
     (select auth.uid()) = user_id
-    and lower(coalesce((select auth.jwt() ->> 'email'), '')) = 'kaankuzucub@gmail.com'
+    and lower(coalesce((select auth.jwt() ->> 'email'), '')) = 'kagankuzucu8@gmail.com'
   )
   with check (
     (select auth.uid()) = user_id
-    and lower(coalesce((select auth.jwt() ->> 'email'), '')) = 'kaankuzucub@gmail.com'
+    and lower(coalesce((select auth.jwt() ->> 'email'), '')) = 'kagankuzucu8@gmail.com'
   );
 
 create policy "own delete education_videos"
@@ -437,7 +437,7 @@ create policy "own delete education_videos"
   to authenticated
   using (
     (select auth.uid()) = user_id
-    and lower(coalesce((select auth.jwt() ->> 'email'), '')) = 'kaankuzucub@gmail.com'
+    and lower(coalesce((select auth.jwt() ->> 'email'), '')) = 'kagankuzucu8@gmail.com'
   );
 
 create policy "own pbm_brain_runs"
@@ -470,7 +470,7 @@ create policy "own ai_teaching_feedback"
       where lower(access.email) = lower(coalesce((select auth.jwt() ->> 'email'), ''))
         and access.status = 'active'
         and access.role = 'admin'
-        and lower(access.email) = 'kaankuzucub@gmail.com'
+        and lower(access.email) = 'kagankuzucu8@gmail.com'
     )
   );
 
@@ -531,7 +531,7 @@ create policy "authenticated upload social images"
       where lower(access.email) = lower(coalesce((select auth.jwt() ->> 'email'), ''))
         and access.status = 'active'
         and access.role = 'admin'
-        and lower(access.email) = 'kaankuzucub@gmail.com'
+        and lower(access.email) = 'kagankuzucu8@gmail.com'
     )
   );
 
@@ -550,7 +550,7 @@ create policy "own delete social images"
 
 insert into public.beta_access (email, role, status, weekly_ai_limit, daily_ai_limit, can_post_social, can_add_education, notes)
 values
-  ('kaankuzucub@gmail.com', 'admin', 'active', 9999, 9999, true, true, 'PBM admin'),
+  ('kagankuzucu8@gmail.com', 'admin', 'active', 9999, 9999, true, true, 'PBM admin'),
   ('trader@marketdesk.test', 'user', 'active', 10, 10, false, false, 'Local test account')
 on conflict (email) do update
 set role = excluded.role,
@@ -569,7 +569,7 @@ set role = 'user',
     can_post_social = false,
     can_add_education = false,
     updated_at = now()
-where lower(email) <> 'kaankuzucub@gmail.com'
+where lower(email) <> 'kagankuzucu8@gmail.com'
   and (role = 'admin' or can_post_social is true or can_add_education is true);
 
 -- =========== Bootstrap helper for new users ===========

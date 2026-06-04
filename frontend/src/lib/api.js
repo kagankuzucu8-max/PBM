@@ -1,6 +1,6 @@
 // Backend API wrapper
 import axios from "axios";
-import { supabase } from "@/lib/supabase";
+import { readStoredSupabaseSession } from "@/lib/supabase";
 import { getRuntimeEnv } from "@/lib/runtimeEnv";
 
 const BACKEND_URL = getRuntimeEnv("REACT_APP_BACKEND_URL");
@@ -15,8 +15,7 @@ export const apiClient = axios.create({
 });
 
 apiClient.interceptors.request.use(async (config) => {
-  const { data } = await supabase.auth.getSession();
-  const token = data.session?.access_token;
+  const token = readStoredSupabaseSession()?.access_token;
   if (token) {
     config.headers = config.headers || {};
     config.headers.Authorization = `Bearer ${token}`;

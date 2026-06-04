@@ -1,5 +1,12 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { SUPABASE_ANON_KEY, SUPABASE_STORAGE_KEY, SUPABASE_URL, supabase } from "@/lib/supabase";
+import {
+  clearStoredSupabaseSession,
+  readStoredSupabaseSession,
+  SUPABASE_ANON_KEY,
+  SUPABASE_STORAGE_KEY,
+  SUPABASE_URL,
+  supabase,
+} from "@/lib/supabase";
 import { getAccountStatus } from "@/lib/api";
 
 const AuthContext = createContext(null);
@@ -31,8 +38,26 @@ async function ensureUserBootstrap(user) {
   }
 }
 
-const isBodyStreamError = (error) =>
-  /body stream|body is already|already read|already used/i.test(String(error?.message || error || ""));
+function postJsonWithXHR(url, headers, payload) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", url, true);
+    Object.entries(headers).forEach(([key, value]) => xhr.setRequestHeader(key, value));
+    xhr.onload = () => {
+      let body = null;
+      try {
+        body = xhr.responseText ? JSON.parse(xhr.responseText) : null;
+      } catch {
+        body = { message: xhr.responseText };
+      }
+      resolve({ ok: xhr.status >= 200 && xhr.status < 300, status: xhr.status, body });
+    };
+    xhr.onerror = () => reject(new Error("Network request failed"));
+    xhr.ontimeout = () => reject(new Error("Network request timed out"));
+    xhr.timeout = 30000;
+    xhr.send(JSON.stringify(payload));
+  });
+}
 
 function parseJwtPayload(token) {
   try {
@@ -76,40 +101,46 @@ async function directPasswordSignIn(email, password) {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
     throw new Error("Supabase env vars are missing");
   }
-  const response = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
-    method: "POST",
-    headers: {
+  const { ok, body } = await postJsonWithXHR(
+    `${SUPABASE_URL}/auth/v1/token?grant_type=password`,
+    {
       apikey: SUPABASE_ANON_KEY,
       "content-type": "application/json",
     },
-    body: JSON.stringify({ email, password }),
-  });
-  const text = await response.text();
-  let body = null;
-  try {
-    body = text ? JSON.parse(text) : null;
-  } catch {
-    body = { message: text };
-  }
-  if (!response.ok) {
+    { email, password },
+  );
+  if (!ok) {
     throw new Error(body?.error_description || body?.msg || body?.message || "Authentication failed");
   }
   if (!body?.access_token || !body?.refresh_token) {
     throw new Error("Supabase did not return a session");
   }
   const directSession = buildDirectSession(body, email);
-  try {
-    const { data, error } = await supabase.auth.setSession({
-      access_token: body.access_token,
-      refresh_token: body.refresh_token,
-    });
-    if (!error) return { data: data || { session: directSession, user: directSession.user }, error: null };
-    if (!isBodyStreamError(error)) throw error;
-  } catch (error) {
-    if (!isBodyStreamError(error)) throw error;
-  }
   persistDirectSession(directSession);
   return { data: { session: directSession, user: directSession.user }, error: null };
+}
+
+async function directSignUp(email, password) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    throw new Error("Supabase env vars are missing");
+  }
+  const { ok, body } = await postJsonWithXHR(
+    `${SUPABASE_URL}/auth/v1/signup`,
+    {
+      apikey: SUPABASE_ANON_KEY,
+      "content-type": "application/json",
+    },
+    { email, password },
+  );
+  if (!ok) {
+    throw new Error(body?.error_description || body?.msg || body?.message || "Sign up failed");
+  }
+  if (body?.access_token && body?.refresh_token) {
+    const directSession = buildDirectSession(body, email);
+    persistDirectSession(directSession);
+    return { data: { session: directSession, user: directSession.user }, error: null };
+  }
+  return { data: { session: null, user: body?.user || null }, error: null };
 }
 
 export function AuthProvider({ children }) {
@@ -122,8 +153,8 @@ export function AuthProvider({ children }) {
 
   const refreshAccount = useCallback(async () => {
     setAccountError("");
-    const { data } = await supabase.auth.getSession();
-    if (!data.session?.user) {
+    const currentSession = readStoredSupabaseSession();
+    if (!currentSession?.user) {
       setAccount(null);
       return null;
     }
@@ -143,50 +174,37 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     let mounted = true;
-    supabase.auth.getSession().then(({ data }) => {
+    const currentSession = readStoredSupabaseSession();
+    const currentUser = currentSession?.user ?? null;
+    setSession(currentSession);
+    setUser(currentUser);
+    setLoading(false);
+    if (currentUser) {
+      ensureUserBootstrap(currentUser).catch(() => {});
+      refreshAccount().catch(() => {});
+    }
+    const syncStoredSession = () => {
       if (!mounted) return;
-      const currentSession = data.session;
-      const currentUser = currentSession?.user ?? null;
-      setSession(currentSession);
-      setUser(currentUser);
-      setLoading(false);
-      if (currentUser) {
-        ensureUserBootstrap(currentUser).catch(() => {});
+      const stored = readStoredSupabaseSession();
+      setSession(stored);
+      setUser(stored?.user ?? null);
+      if (stored?.user) {
+        ensureUserBootstrap(stored.user).catch(() => {});
         refreshAccount().catch(() => {});
-      }
-    }).catch(() => {
-      if (mounted) setLoading(false);
-    });
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, sess) => {
-      setSession(sess);
-      setUser(sess?.user ?? null);
-      if (sess?.user) {
-        setTimeout(() => {
-          ensureUserBootstrap(sess.user).catch(() => {});
-          refreshAccount().catch(() => {});
-        }, 0);
       } else {
         setAccount(null);
       }
-    });
+    };
+    window.addEventListener("storage", syncStoredSession);
     return () => {
       mounted = false;
-      sub.subscription.unsubscribe();
+      window.removeEventListener("storage", syncStoredSession);
     };
   }, [refreshAccount]);
 
   const signIn = async (email, password) => {
     const cleanEmail = email.trim().toLowerCase();
-    let result;
-    try {
-      result = await supabase.auth.signInWithPassword({ email: cleanEmail, password });
-    } catch (error) {
-      if (!isBodyStreamError(error)) throw error;
-      result = await directPasswordSignIn(cleanEmail, password);
-    }
-    if (isBodyStreamError(result?.error)) {
-      result = await directPasswordSignIn(cleanEmail, password);
-    }
+    const result = await directPasswordSignIn(cleanEmail, password);
     const { data, error } = result;
     if (error) throw error;
     if (data.session) setSession(data.session);
@@ -195,13 +213,17 @@ export function AuthProvider({ children }) {
     refreshAccount().catch(() => {});
   };
   const signUp = async (email, password) => {
-    const { data, error } = await supabase.auth.signUp({ email: email.trim().toLowerCase(), password });
+    const { data, error } = await directSignUp(email.trim().toLowerCase(), password);
     if (error) throw error;
+    if (data.session) setSession(data.session);
+    if (data.user) setUser(data.user);
     if (data.user) ensureUserBootstrap(data.user).catch(() => {});
     refreshAccount().catch(() => {});
   };
   const signOut = async () => {
-    await supabase.auth.signOut();
+    clearStoredSupabaseSession();
+    setSession(null);
+    setUser(null);
     setAccount(null);
   };
 

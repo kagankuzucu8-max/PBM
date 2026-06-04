@@ -24,3 +24,20 @@ export const SUPABASE_URL = url;
 export const SUPABASE_ANON_KEY = anon;
 export const SUPABASE_STORAGE_KEY = storageKey;
 export const SUPABASE_CONFIGURED = Boolean(url && anon);
+
+export function readStoredSupabaseSession() {
+  if (typeof window === "undefined" || !window.localStorage) return null;
+  try {
+    const raw = window.localStorage.getItem(storageKey);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function clearStoredSupabaseSession() {
+  if (typeof window === "undefined" || !window.localStorage) return;
+  window.localStorage.removeItem(storageKey);
+  window.localStorage.removeItem(`${storageKey}-user`);
+  window.localStorage.removeItem(`${storageKey}-code-verifier`);
+}

@@ -1,41 +1,22 @@
 # PBM Cloudflare Workers Deploy
 
-Bu dokuman PBM'i Cloudflare Workers + Static Assets uzerinde calistirma ayarlaridir. Supabase ayni kalir; kullanici hesaplari ve datalar tasinmaz.
+PBM, Cloudflare Workers + Static Assets uzerinde calisir. Supabase ayni kalir; kullanici hesaplari ve kullanici datalari korunur.
 
-## Cloudflare Workers ayarlari
+## Build settings
 
-- Framework preset: `Create React App` veya `None`
-- Root directory: bos birak veya repo root
-- Build command:
-
-```bash
-bos birak
-```
-
+- Root directory: repo root (`/`)
+- Build command: bos birak
 - Deploy command:
 
 ```bash
 npx wrangler deploy
 ```
 
-`wrangler.toml` hazir static dosyalari `frontend/build` klasorunden Static Assets olarak yayinlar. Bu pakette `frontend/build` hazir gelir; Cloudflare build komutu calistirmasa bile klasor vardir. API endpoint:
+`wrangler.toml`, repoda hazir bulunan `frontend/build` klasorunu yayinlar ve Worker API'sini `/api` altinda calistirir.
 
-Not: Cloudflare bazen paneldeki build command'i kosmadan direkt deploy command'e gecebilir. Bu pakette `frontend/build` repoda hazir gelir; bu yuzden `frontend/build does not exist` hatasi bitmis olur.
+## Worker variables
 
-```text
-/api
-```
-
-Frontend varsayilan olarak `REACT_APP_API_BASE` yoksa `/api` kullanir.
-
-Not: `wrangler.toml` icinde `keep_vars = true` vardir. Bu, Cloudflare Dashboard'da girdigin Supabase/Claude/Twelve Data env keylerini deploy sirasinda silmemesi icindir.
-
-Not: SPA fallback Cloudflare Workers tarafinda `not_found_handling = "single-page-application"` ile yapilir.
-
-## Environment variables
-
-Cloudflare Pages > Settings > Environment variables alanina bunlari gir:
-Cloudflare > Workers & Pages > PBM > Settings > Variables alaninda bu keyleri gir:
+Cloudflare Dashboard > Workers & Pages > `pbm-marketdesk` > Settings > Variables:
 
 ```text
 REACT_APP_SUPABASE_URL
@@ -48,32 +29,62 @@ TWELVE_DATA_API_KEY
 PBM_SITE_URL
 ```
 
-Opsiyonel mail bildirimi icin:
+Social email bildirimleri icin:
 
 ```text
 RESEND_API_KEY
 PBM_EMAIL_FROM
 ```
 
-`PBM_SITE_URL`, Cloudflare site linkin olmalı. Ornek:
+`PBM_SITE_URL`, canli uygulamanin tam adresi olmali:
 
 ```text
-https://pbm.pages.dev
+https://app.senindomainin.com
 ```
+
+`PBM_EMAIL_FROM`, Resend'de dogrulanmis bir domain adresi olmali:
+
+```text
+PBM <notifications@senindomainin.com>
+```
+
+## URL'deki kagankuzucu8-max adini kaldirma
+
+`kagankuzucu8-max`, Cloudflare hesabinin `workers.dev` alt alan adidir. Bunu Cloudflare Dashboard > Workers & Pages ekraninda `Your subdomain` yanindaki `Change` ile degistirebilirsin. Bu hesap seviyesinde oldugu icin hesaptaki tum Worker URL'lerini etkiler.
+
+Production icin onerilen cozum temiz bir Custom Domain baglamaktir:
+
+1. Cloudflare Dashboard > Workers & Pages > `pbm-marketdesk`
+2. Settings > Domains & Routes
+3. Add > Custom Domain
+4. Ornek olarak `app.senindomainin.com` yaz ve onayla
+5. Worker Variables icindeki `PBM_SITE_URL` degerini ayni URL yap
+
+Cloudflare DNS kaydini ve SSL sertifikasini otomatik yonetir. Domain'in Cloudflare hesabinda aktif bir zone olmasi gerekir.
 
 ## Supabase SQL
 
-Admin yetkisini sadece `kagankuzucu8@gmail.com` hesabina sabitlemek icin su dosyayi Supabase SQL Editor'de bir kere calistir:
+Yeni Social web bildirim merkezi icin Supabase SQL Editor'de bir kere calistir:
 
 ```text
-supabase_cloudflare_admin_fix_20260531/01_admin_only_permissions.sql
+supabase/social_notifications_20260606.sql
 ```
 
-Bu SQL normal kullanicilari user rolune ceker; social post, social image upload, education video ekleme ve AI Teaching admin kilidini admin hesaba baglar.
+Tum sifir kurulum semasi:
 
-## Kontrol
+```text
+supabase/schema.sql
+```
 
-Deploy sonrasi su endpoint acilmali:
+Admin yetkisini sadece `kagankuzucu8@gmail.com` hesabina sabitlemek icin:
+
+```text
+supabase/admin_transfer_kagankuzucu8.sql
+```
+
+## Deploy kontrolu
+
+Deploy sonrasi:
 
 ```text
 https://SENIN-CLOUDFLARE-LINKIN/api/health
@@ -85,4 +96,4 @@ Beklenen cevap:
 {"status":"ok","service":"pbm-ai","runtime":"cloudflare-workers"}
 ```
 
-Tasarim/palet/chart/AI ekranlari bu tasima ile degismez.
+Dashboard, chart, AI analiz ve mevcut PBM tasarim motoru bu kurulumda degismez.

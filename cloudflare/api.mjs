@@ -386,6 +386,41 @@ const sendSocialEmail = async (to, post, senderEmail) => {
   return { ok: true, email: to, id: body?.id };
 };
 
+const createWebNotifications = async (recipients, post, senderEmail) => {
+  if (!hasSupabaseServiceKey() || !recipients.length) return { created: 0, failed: false };
+  const symbol = String(post.symbol || "PBM").trim().toUpperCase();
+  const timeframe = String(post.timeframe || "1h").trim();
+  const bias = String(post.bias || "neutral").trim();
+  const body = String(post.summary || `${timeframe} ${bias} position update`).trim().slice(0, 500);
+  const rows = recipients.map((recipientEmail) => ({
+    recipient_email: recipientEmail,
+    sender_email: senderEmail,
+    type: "social_post",
+    title: `${symbol} position update`,
+    body,
+    href: "/social",
+    payload: {
+      post_id: post.post_id || post.id || null,
+      symbol,
+      timeframe,
+      bias,
+      confidence: post.confidence ?? null,
+      image_url: post.image_url || "",
+    },
+  }));
+  try {
+    const created = await supabaseAdminJson("notifications", {
+      method: "POST",
+      service: true,
+      headers: { prefer: "return=representation" },
+      body: JSON.stringify(rows),
+    });
+    return { created: Array.isArray(created) ? created.length : rows.length, failed: false };
+  } catch (error) {
+    return { created: 0, failed: true, detail: error?.message || "Web notification insert failed" };
+  }
+};
+
 const notifySocialPost = async (request) => {
   const auth = await requireBetaUser(request);
   if (!auth.isAdmin) {
@@ -397,8 +432,17 @@ const notifySocialPost = async (request) => {
   if (!recipients.length) {
     return { skipped: true, reason: "No active beta recipients found", sent: 0, failed: 0 };
   }
+  const web = await createWebNotifications(recipients, post, auth.user.email);
   if (!getEnv("RESEND_API_KEY")) {
-    return { skipped: true, reason: "RESEND_API_KEY is not configured", recipients: recipients.length, sent: 0, failed: 0 };
+    return {
+      skipped: true,
+      reason: "RESEND_API_KEY is not configured",
+      recipients: recipients.length,
+      web_created: web.created,
+      web_failed: web.failed,
+      sent: 0,
+      failed: 0,
+    };
   }
 
   const results = [];
@@ -410,10 +454,60 @@ const notifySocialPost = async (request) => {
   return {
     skipped: false,
     recipients: recipients.length,
+    web_created: web.created,
+    web_failed: web.failed,
     sent,
     failed,
     errors: results.filter((item) => item.ok === false).slice(0, 5),
   };
+};
+
+const listNotifications = async (request) => {
+  const auth = await requireBetaUser(request);
+  const params = new URLSearchParams({
+    select: "*",
+    recipient_email: `eq.${auth.user.email}`,
+    order: "created_at.desc",
+    limit: "50",
+  });
+  const rows = await supabaseAdminJson(`notifications?${params}`, {
+    service: true,
+    supabaseHints: auth.user.supabaseHints,
+  });
+  return Array.isArray(rows) ? rows : [];
+};
+
+const markNotificationRead = async (request, id) => {
+  const auth = await requireBetaUser(request);
+  if (!/^[0-9a-f-]{36}$/i.test(id)) throw httpError(400, "Invalid notification id");
+  const params = new URLSearchParams({
+    id: `eq.${id}`,
+    recipient_email: `eq.${auth.user.email}`,
+  });
+  await supabaseAdminJson(`notifications?${params}`, {
+    method: "PATCH",
+    service: true,
+    supabaseHints: auth.user.supabaseHints,
+    headers: { prefer: "return=minimal" },
+    body: JSON.stringify({ read_at: new Date().toISOString() }),
+  });
+  return { ok: true };
+};
+
+const markAllNotificationsRead = async (request) => {
+  const auth = await requireBetaUser(request);
+  const params = new URLSearchParams({
+    recipient_email: `eq.${auth.user.email}`,
+    read_at: "is.null",
+  });
+  await supabaseAdminJson(`notifications?${params}`, {
+    method: "PATCH",
+    service: true,
+    supabaseHints: auth.user.supabaseHints,
+    headers: { prefer: "return=minimal" },
+    body: JSON.stringify({ read_at: new Date().toISOString() }),
+  });
+  return { ok: true };
 };
 
 const cleanYouTubeId = (value) => {
@@ -1778,6 +1872,12 @@ const handle = async (request) => {
   if (request.method === "GET" && path === "/ml/export") return json(await mlExport(request, url), 200, request);
   if (request.method === "POST" && path === "/ml/import") return json(await mlImport(request), 200, request);
   if (request.method === "POST" && path === "/social/notify") return json(await notifySocialPost(request), 200, request);
+  if (request.method === "GET" && path === "/notifications") return json(await listNotifications(request), 200, request);
+  if (request.method === "POST" && path === "/notifications/read-all") return json(await markAllNotificationsRead(request), 200, request);
+  const notificationReadMatch = path.match(/^\/notifications\/([^/]+)\/read$/);
+  if (request.method === "PATCH" && notificationReadMatch) {
+    return json(await markNotificationRead(request, notificationReadMatch[1]), 200, request);
+  }
 
   return json({ detail: "Not found" }, 404, request);
 };

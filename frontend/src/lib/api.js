@@ -55,6 +55,21 @@ export async function notifySocialPost(payload) {
   return data;
 }
 
+export async function listNotifications() {
+  const { data } = await apiClient.get("/notifications");
+  return data;
+}
+
+export async function markNotificationRead(id) {
+  const { data } = await apiClient.patch(`/notifications/${id}/read`);
+  return data;
+}
+
+export async function markAllNotificationsRead() {
+  const { data } = await apiClient.post("/notifications/read-all");
+  return data;
+}
+
 export async function getAccountStatus() {
   const { data } = await apiClient.get("/me");
   return data;

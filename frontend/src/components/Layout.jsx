@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import MobileInstallPrompt from "@/components/MobileInstallPrompt";
+import NotificationCenter from "@/components/NotificationCenter";
 
 const NAV = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, testid: "nav-dashboard" },
@@ -94,13 +95,16 @@ export default function Layout({ children }) {
           ))}
         </nav>
         <div className="px-3 py-4 border-t border-zinc-200">
-          <div className="px-3 py-2 mb-2">
-            <div className="text-[11px] tracking-[0.1em] uppercase text-zinc-400 font-semibold">
-              Signed in as
+          <div className="px-3 py-2 mb-2 flex items-center gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="text-[11px] tracking-[0.1em] uppercase text-zinc-400 font-semibold">
+                Signed in as
+              </div>
+              <div className="text-xs text-zinc-700 mt-0.5 truncate" data-testid="user-email">
+                {displayName || user?.email}
+              </div>
             </div>
-            <div className="text-xs text-zinc-700 mt-0.5 truncate" data-testid="user-email">
-              {displayName || user?.email}
-            </div>
+            <NotificationCenter className="w-9 h-9 shrink-0" browserAlerts viewport="desktop" />
           </div>
           <button
             onClick={handleSignOut}
@@ -128,15 +132,18 @@ export default function Layout({ children }) {
               </div>
             </div>
           </Link>
-          <button
-            type="button"
-            onClick={() => setMobileMenuOpen(true)}
-            className="w-10 h-10 inline-flex items-center justify-center rounded-md border border-zinc-200 bg-white text-zinc-900 active:bg-zinc-100 transition-colors"
-            aria-label="Open menu"
-            data-testid="mobile-menu-open"
-          >
-            <Menu className="w-5 h-5" strokeWidth={1.75} />
-          </button>
+          <div className="flex items-center gap-2">
+            <NotificationCenter className="w-10 h-10" viewport="mobile" />
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(true)}
+              className="w-10 h-10 inline-flex items-center justify-center rounded-md border border-zinc-200 bg-white text-zinc-900 active:bg-zinc-100 transition-colors"
+              aria-label="Open menu"
+              data-testid="mobile-menu-open"
+            >
+              <Menu className="w-5 h-5" strokeWidth={1.75} />
+            </button>
+          </div>
         </div>
       </header>
 

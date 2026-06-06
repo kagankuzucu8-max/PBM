@@ -109,6 +109,19 @@ create table if not exists public.social_posts (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.notifications (
+  id uuid primary key default gen_random_uuid(),
+  recipient_email text not null,
+  sender_email text,
+  type text not null default 'social_post',
+  title text not null,
+  body text,
+  href text not null default '/social',
+  payload jsonb not null default '{}'::jsonb,
+  read_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
 create table if not exists public.journal_entries (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
@@ -260,6 +273,10 @@ create index if not exists alerts_user_active_idx
   on public.alerts (user_id, active);
 create index if not exists social_posts_created_idx
   on public.social_posts (created_at desc);
+create index if not exists notifications_recipient_created_idx
+  on public.notifications (lower(recipient_email), created_at desc);
+create index if not exists notifications_recipient_unread_idx
+  on public.notifications (lower(recipient_email), read_at, created_at desc);
 create index if not exists journal_entries_user_date_idx
   on public.journal_entries (user_id, trade_date desc);
 create index if not exists payout_accounts_user_created_idx
@@ -290,6 +307,7 @@ alter table public.alerts enable row level security;
 alter table public.analysis_history enable row level security;
 alter table public.analysis_cache enable row level security;
 alter table public.social_posts enable row level security;
+alter table public.notifications enable row level security;
 alter table public.journal_entries enable row level security;
 alter table public.payout_accounts enable row level security;
 alter table public.payout_records enable row level security;
@@ -307,7 +325,7 @@ begin
     select schemaname, tablename, policyname
     from pg_policies
     where schemaname='public'
-      and tablename in ('user_settings','beta_access','usage_events','watchlists','watchlist_items','alerts','analysis_history','analysis_cache','social_posts','journal_entries','payout_accounts','payout_records','education_videos','pbm_brain_runs','pbm_brain_memories','pbm_brain_exports','ai_teaching_feedback')
+      and tablename in ('user_settings','beta_access','usage_events','watchlists','watchlist_items','alerts','analysis_history','analysis_cache','social_posts','notifications','journal_entries','payout_accounts','payout_records','education_videos','pbm_brain_runs','pbm_brain_memories','pbm_brain_exports','ai_teaching_feedback')
   loop
     execute format('drop policy if exists %I on %I.%I', r.policyname, r.schemaname, r.tablename);
   end loop;
@@ -388,6 +406,17 @@ create policy "own delete social_posts"
   on public.social_posts for delete
   to authenticated
   using ((select auth.uid()) = user_id);
+
+create policy "own notifications read"
+  on public.notifications for select
+  to authenticated
+  using (lower(recipient_email) = lower(coalesce((select auth.jwt() ->> 'email'), '')));
+
+create policy "own notifications update"
+  on public.notifications for update
+  to authenticated
+  using (lower(recipient_email) = lower(coalesce((select auth.jwt() ->> 'email'), '')))
+  with check (lower(recipient_email) = lower(coalesce((select auth.jwt() ->> 'email'), '')));
 
 create policy "own journal_entries"
   on public.journal_entries for all

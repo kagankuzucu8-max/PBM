@@ -70,6 +70,11 @@ export async function markAllNotificationsRead() {
   return data;
 }
 
+export async function registerPushToken(payload) {
+  const { data } = await apiClient.post("/push/register", payload);
+  return data;
+}
+
 export async function getAccountStatus() {
   const { data } = await apiClient.get("/me");
   return data;

@@ -1,8 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Bell, BellRing, CheckCheck, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { Capacitor } from "@capacitor/core";
 import { listNotifications, markAllNotificationsRead, markNotificationRead } from "@/lib/api";
 import { fmtDate } from "@/lib/format";
+import { enableNativePush, getNativePushPermission } from "@/lib/nativePush";
 
 export default function NotificationCenter({ className = "", browserAlerts = false, viewport = "all" }) {
   const navigate = useNavigate();
@@ -16,6 +18,7 @@ export default function NotificationCenter({ className = "", browserAlerts = fal
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [nativePermission, setNativePermission] = useState("prompt");
   const initialized = useRef(false);
   const latestId = useRef("");
   const unread = useMemo(() => items.filter((item) => !item.read_at).length, [items]);
@@ -31,19 +34,19 @@ export default function NotificationCenter({ className = "", browserAlerts = fal
         initialized.current &&
         nextLatest &&
         nextLatest.id !== latestId.current &&
-        !nextLatest.read_at &&
-        "Notification" in window &&
-        Notification.permission === "granted"
+        !nextLatest.read_at
       ) {
-        const notification = new Notification(nextLatest.title || "PBM notification", {
-          body: nextLatest.body || "A new PBM update is available.",
-          icon: "/pbm-icon-192.png",
-          tag: nextLatest.id,
-        });
-        notification.onclick = () => {
-          window.focus();
-          window.location.assign(nextLatest.href || "/social");
-        };
+        if (!Capacitor.isNativePlatform() && "Notification" in window && Notification.permission === "granted") {
+          const notification = new Notification(nextLatest.title || "PBM notification", {
+            body: nextLatest.body || "A new PBM update is available.",
+            icon: "/pbm-icon-192.png",
+            tag: nextLatest.id,
+          });
+          notification.onclick = () => {
+            window.focus();
+            window.location.assign(nextLatest.href || "/social");
+          };
+        }
       }
       latestId.current = nextLatest?.id || "";
       initialized.current = true;
@@ -78,6 +81,13 @@ export default function NotificationCenter({ className = "", browserAlerts = fal
     };
   }, [reload, viewportActive]);
 
+  useEffect(() => {
+    if (!viewportActive || !Capacitor.isNativePlatform()) return;
+    getNativePushPermission()
+      .then(setNativePermission)
+      .catch(() => setNativePermission("prompt"));
+  }, [viewportActive]);
+
   const openItem = async (item) => {
     if (!item.read_at) {
       setItems((current) =>
@@ -96,6 +106,12 @@ export default function NotificationCenter({ className = "", browserAlerts = fal
   };
 
   const enableBrowserAlerts = async () => {
+    if (Capacitor.isNativePlatform()) {
+      const result = await enableNativePush();
+      setNativePermission(result.permission || "prompt");
+      setOpen(false);
+      return;
+    }
     if (!("Notification" in window)) return;
     await Notification.requestPermission();
     setOpen(false);
@@ -158,7 +174,10 @@ export default function NotificationCenter({ className = "", browserAlerts = fal
               </div>
             </div>
 
-            {browserAlerts && "Notification" in window && Notification.permission !== "granted" && (
+            {browserAlerts && (
+              (Capacitor.isNativePlatform() && nativePermission !== "granted") ||
+              (!Capacitor.isNativePlatform() && "Notification" in window && Notification.permission !== "granted")
+            ) && (
               <button
                 type="button"
                 onClick={enableBrowserAlerts}
@@ -166,8 +185,14 @@ export default function NotificationCenter({ className = "", browserAlerts = fal
               >
                 <BellRing className="w-4 h-4 text-zinc-700 shrink-0" />
                 <span>
-                  <span className="block text-sm font-semibold text-zinc-950">Enable browser alerts</span>
-                  <span className="block text-xs text-zinc-500 mt-0.5">Show new PBM posts while the app is open.</span>
+                  <span className="block text-sm font-semibold text-zinc-950">
+                    {Capacitor.isNativePlatform() ? "Enable mobile alerts" : "Enable browser alerts"}
+                  </span>
+                  <span className="block text-xs text-zinc-500 mt-0.5">
+                    {Capacitor.isNativePlatform()
+                      ? "Receive PBM posts even when the app is closed."
+                      : "Show new PBM posts while the app is open."}
+                  </span>
                 </span>
               </button>
             )}

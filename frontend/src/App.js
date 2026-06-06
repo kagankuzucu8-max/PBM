@@ -17,6 +17,7 @@ import PBMBrainPage from "@/pages/PBMBrain";
 import AITeachingPage from "@/pages/AITeaching";
 import HistoryPage from "@/pages/History";
 import SettingsPage from "@/pages/Settings";
+import MobileNativeBridge from "@/components/MobileNativeBridge";
 
 const withLayout = (node) => (
   <ProtectedRoute>
@@ -28,6 +29,7 @@ function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
+        <MobileNativeBridge />
         <Routes>
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/" element={withLayout(<Dashboard />)} />

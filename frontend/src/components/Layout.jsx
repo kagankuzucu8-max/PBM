@@ -133,7 +133,7 @@ export default function Layout({ children }) {
             </div>
           </Link>
           <div className="flex items-center gap-2">
-            <NotificationCenter className="w-10 h-10" viewport="mobile" />
+            <NotificationCenter className="w-10 h-10" browserAlerts viewport="mobile" />
             <button
               type="button"
               onClick={() => setMobileMenuOpen(true)}

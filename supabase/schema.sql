@@ -122,6 +122,17 @@ create table if not exists public.notifications (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.push_tokens (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  recipient_email text not null,
+  token text not null unique,
+  platform text not null default 'android',
+  active boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists public.journal_entries (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
@@ -277,6 +288,8 @@ create index if not exists notifications_recipient_created_idx
   on public.notifications (lower(recipient_email), created_at desc);
 create index if not exists notifications_recipient_unread_idx
   on public.notifications (lower(recipient_email), read_at, created_at desc);
+create index if not exists push_tokens_recipient_active_idx
+  on public.push_tokens (lower(recipient_email), active, updated_at desc);
 create index if not exists journal_entries_user_date_idx
   on public.journal_entries (user_id, trade_date desc);
 create index if not exists payout_accounts_user_created_idx
@@ -308,6 +321,7 @@ alter table public.analysis_history enable row level security;
 alter table public.analysis_cache enable row level security;
 alter table public.social_posts enable row level security;
 alter table public.notifications enable row level security;
+alter table public.push_tokens enable row level security;
 alter table public.journal_entries enable row level security;
 alter table public.payout_accounts enable row level security;
 alter table public.payout_records enable row level security;
@@ -325,7 +339,7 @@ begin
     select schemaname, tablename, policyname
     from pg_policies
     where schemaname='public'
-      and tablename in ('user_settings','beta_access','usage_events','watchlists','watchlist_items','alerts','analysis_history','analysis_cache','social_posts','notifications','journal_entries','payout_accounts','payout_records','education_videos','pbm_brain_runs','pbm_brain_memories','pbm_brain_exports','ai_teaching_feedback')
+      and tablename in ('user_settings','beta_access','usage_events','watchlists','watchlist_items','alerts','analysis_history','analysis_cache','social_posts','notifications','push_tokens','journal_entries','payout_accounts','payout_records','education_videos','pbm_brain_runs','pbm_brain_memories','pbm_brain_exports','ai_teaching_feedback')
   loop
     execute format('drop policy if exists %I on %I.%I', r.policyname, r.schemaname, r.tablename);
   end loop;
@@ -417,6 +431,15 @@ create policy "own notifications update"
   to authenticated
   using (lower(recipient_email) = lower(coalesce((select auth.jwt() ->> 'email'), '')))
   with check (lower(recipient_email) = lower(coalesce((select auth.jwt() ->> 'email'), '')));
+
+create policy "own push_tokens"
+  on public.push_tokens for all
+  to authenticated
+  using ((select auth.uid()) = user_id)
+  with check (
+    (select auth.uid()) = user_id
+    and lower(recipient_email) = lower(coalesce((select auth.jwt() ->> 'email'), ''))
+  );
 
 create policy "own journal_entries"
   on public.journal_entries for all
@@ -525,6 +548,11 @@ create trigger beta_access_updated_at
 drop trigger if exists analysis_cache_updated_at on public.analysis_cache;
 create trigger analysis_cache_updated_at
   before update on public.analysis_cache
+  for each row execute function public.tg_set_updated_at();
+
+drop trigger if exists push_tokens_updated_at on public.push_tokens;
+create trigger push_tokens_updated_at
+  before update on public.push_tokens
   for each row execute function public.tg_set_updated_at();
 
 drop trigger if exists payout_accounts_updated_at on public.payout_accounts;

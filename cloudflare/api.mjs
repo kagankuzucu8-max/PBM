@@ -14,6 +14,7 @@ const POPULAR_CRYPTO = [
 const POPULAR_FOREX = ["EURUSD", "GBPUSD", "USDJPY", "USDCHF", "AUDUSD", "USDCAD", "NZDUSD", "EURJPY"];
 const POPULAR_INDICES = ["SPX", "NDX", "DJI", "IXIC", "RUT", "DAX", "FTSE", "N225"];
 const ADMIN_EMAILS = new Set(["kagankuzucu8@gmail.com"]);
+let firebaseAccessTokenCache = null;
 const FOREX_CODES = new Set(["USD", "EUR", "GBP", "JPY", "AUD", "NZD", "CAD", "CHF", "TRY", "CNH", "SEK", "NOK", "DKK", "MXN", "ZAR"]);
 const INDEX_ALIASES = new Map([
   ["SPX", "SPX"],
@@ -421,6 +422,150 @@ const createWebNotifications = async (recipients, post, senderEmail) => {
   }
 };
 
+const base64Url = (value) => {
+  const bytes = typeof value === "string" ? new TextEncoder().encode(value) : new Uint8Array(value);
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+};
+
+const firebaseServiceAccount = () => {
+  const raw = getEnv("FIREBASE_SERVICE_ACCOUNT_JSON");
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    try {
+      return JSON.parse(atob(raw));
+    } catch {
+      throw httpError(500, "FIREBASE_SERVICE_ACCOUNT_JSON is invalid");
+    }
+  }
+};
+
+const firebaseAccessToken = async () => {
+  const now = Math.floor(Date.now() / 1000);
+  if (firebaseAccessTokenCache?.expiresAt > now + 60) return firebaseAccessTokenCache.value;
+  const account = firebaseServiceAccount();
+  if (!account?.client_email || !account?.private_key) {
+    throw httpError(500, "Firebase service account is not configured");
+  }
+  const header = base64Url(JSON.stringify({ alg: "RS256", typ: "JWT" }));
+  const claim = base64Url(JSON.stringify({
+    iss: account.client_email,
+    scope: "https://www.googleapis.com/auth/firebase.messaging",
+    aud: "https://oauth2.googleapis.com/token",
+    iat: now,
+    exp: now + 3600,
+  }));
+  const signingInput = `${header}.${claim}`;
+  const pem = account.private_key
+    .replace(/-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----|\s+/g, "");
+  const keyBytes = Uint8Array.from(atob(pem), (character) => character.charCodeAt(0));
+  const key = await crypto.subtle.importKey(
+    "pkcs8",
+    keyBytes,
+    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const signature = await crypto.subtle.sign(
+    "RSASSA-PKCS1-v1_5",
+    key,
+    new TextEncoder().encode(signingInput),
+  );
+  const assertion = `${signingInput}.${base64Url(signature)}`;
+  const token = await fetchJson("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+      assertion,
+    }).toString(),
+  });
+  firebaseAccessTokenCache = {
+    value: token.access_token,
+    expiresAt: now + Number(token.expires_in || 3600),
+  };
+  return token.access_token;
+};
+
+const fetchPushTokens = async (recipients) => {
+  if (!hasSupabaseServiceKey() || !recipients.length) return [];
+  const rows = await supabaseAdminJson("push_tokens?select=id,token,recipient_email,platform&active=eq.true&limit=500", {
+    service: true,
+  });
+  const allowed = new Set(recipients);
+  return (Array.isArray(rows) ? rows : []).filter((row) => allowed.has(String(row.recipient_email || "").toLowerCase()));
+};
+
+const sendFirebasePush = async (device, post) => {
+  const account = firebaseServiceAccount();
+  const projectId = getEnv("FIREBASE_PROJECT_ID") || account?.project_id;
+  if (!projectId) throw httpError(500, "FIREBASE_PROJECT_ID is not configured");
+  const token = await firebaseAccessToken();
+  const symbol = String(post.symbol || "PBM").trim().toUpperCase();
+  const response = await fetch(`https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      message: {
+        token: device.token,
+        notification: {
+          title: `${symbol} position update`,
+          body: String(post.summary || `${post.timeframe || "1h"} ${post.bias || "neutral"} PBM update`).slice(0, 180),
+          ...(post.image_url ? { image: post.image_url } : {}),
+        },
+        data: {
+          href: "/social",
+          type: "social_post",
+          post_id: String(post.post_id || post.id || ""),
+          symbol,
+          timeframe: String(post.timeframe || "1h"),
+          bias: String(post.bias || "neutral"),
+        },
+        android: {
+          priority: "high",
+          notification: {
+            channel_id: "pbm_social",
+            icon: "ic_stat_pbm",
+            color: "#09090B",
+          },
+        },
+      },
+    }),
+  });
+  const text = await response.text();
+  if (!response.ok) {
+    throw httpError(response.status, text || "Firebase push failed");
+  }
+  return { ok: true, token: device.token };
+};
+
+const sendSocialPush = async (recipients, post) => {
+  if (!getEnv("FIREBASE_SERVICE_ACCOUNT_JSON")) {
+    return { skipped: true, reason: "Firebase is not configured", devices: 0, sent: 0, failed: 0 };
+  }
+  const devices = await fetchPushTokens(recipients);
+  const results = [];
+  for (const device of devices) {
+    try {
+      results.push(await sendFirebasePush(device, post));
+    } catch (error) {
+      results.push({ ok: false, detail: error?.message || "Firebase push failed" });
+    }
+  }
+  return {
+    skipped: false,
+    devices: devices.length,
+    sent: results.filter((item) => item.ok).length,
+    failed: results.filter((item) => item.ok === false).length,
+  };
+};
+
 const notifySocialPost = async (request) => {
   const auth = await requireBetaUser(request);
   if (!auth.isAdmin) {
@@ -433,6 +578,7 @@ const notifySocialPost = async (request) => {
     return { skipped: true, reason: "No active beta recipients found", sent: 0, failed: 0 };
   }
   const web = await createWebNotifications(recipients, post, auth.user.email);
+  const push = await sendSocialPush(recipients, post);
   if (!getEnv("RESEND_API_KEY")) {
     return {
       skipped: true,
@@ -440,6 +586,7 @@ const notifySocialPost = async (request) => {
       recipients: recipients.length,
       web_created: web.created,
       web_failed: web.failed,
+      push,
       sent: 0,
       failed: 0,
     };
@@ -456,10 +603,34 @@ const notifySocialPost = async (request) => {
     recipients: recipients.length,
     web_created: web.created,
     web_failed: web.failed,
+    push,
     sent,
     failed,
     errors: results.filter((item) => item.ok === false).slice(0, 5),
   };
+};
+
+const registerPushToken = async (request) => {
+  const auth = await requireBetaUser(request);
+  const req = await requestJson(request);
+  const token = String(req.token || "").trim();
+  const platform = String(req.platform || "android").trim().toLowerCase();
+  if (!token) throw httpError(400, "Push token is required");
+  if (!["android", "ios"].includes(platform)) throw httpError(400, "Invalid push platform");
+  await supabaseAdminJson("push_tokens?on_conflict=token", {
+    method: "POST",
+    service: true,
+    headers: { prefer: "resolution=merge-duplicates,return=minimal" },
+    body: JSON.stringify({
+      user_id: auth.user.id,
+      recipient_email: auth.user.email,
+      token,
+      platform,
+      active: true,
+      updated_at: new Date().toISOString(),
+    }),
+  });
+  return { ok: true, platform };
 };
 
 const listNotifications = async (request) => {
@@ -972,43 +1143,42 @@ const marketTicker24h = async (url) => {
   const symbol = url.searchParams.get("symbol");
   const market = url.searchParams.get("market") || "crypto";
   if (symbol) {
-    try {
-      return await fetchYahooQuote(symbol);
-    } catch {
-      // Fall through to exchange/Twelve fallbacks.
-    }
-    if (marketForSymbol(symbol) !== "crypto") {
-      return fetchTwelveQuote(symbol);
-    }
-    try {
-      const params = new URLSearchParams({ instId: toOkxSymbol(symbol) });
-      const body = await fetchJson(`${OKX}/api/v5/market/ticker?${params}`);
-      const data = body.data || [];
-      if (!data.length) throw httpError(404, "Symbol not found");
-      return okxTickerToBinanceShape(data[0]);
-    } catch {
+    if (marketForSymbol(symbol) === "crypto") {
       try {
-        const data = await fetchJson(`${BINANCE}/api/v3/ticker/24hr?${new URLSearchParams({ symbol: String(symbol).toUpperCase() })}`);
-        return binanceTickerToBinanceShape(data);
+        const params = new URLSearchParams({ instId: toOkxSymbol(symbol) });
+        const body = await fetchJson(`${OKX}/api/v5/market/ticker?${params}`);
+        const data = body.data || [];
+        if (!data.length) throw httpError(404, "Symbol not found");
+        return okxTickerToBinanceShape(data[0]);
       } catch {
         try {
-          return await fetchYahooQuote(symbol);
+          const data = await fetchJson(`${BINANCE}/api/v3/ticker/24hr?${new URLSearchParams({ symbol: String(symbol).toUpperCase() })}`);
+          return binanceTickerToBinanceShape(data);
         } catch {
-          return fetchTwelveQuote(symbol);
+          try {
+            return await fetchYahooQuote(symbol);
+          } catch {
+            return fetchTwelveQuote(symbol);
+          }
         }
       }
     }
+    try {
+      return await fetchYahooQuote(symbol);
+    } catch {
+      return fetchTwelveQuote(symbol);
+    }
   }
   const preferredSymbols = marketList(market);
-  try {
-    const rows = await fetchYahooQuotes(preferredSymbols);
-    if (rows.length) return rows;
-  } catch {
-    // Keep the selected market cards populated through the fallbacks below.
-  }
   if (market === "forex" || market === "index") {
-    const rows = await Promise.all(preferredSymbols.map((item) => fetchTwelveQuote(item).catch(() => null)));
-    return rows.filter(Boolean);
+    try {
+      const rows = await fetchYahooQuotes(preferredSymbols);
+      if (rows.length) return rows;
+    } catch {
+      // Keep the selected market cards populated through Twelve Data below.
+    }
+    const fallbackRows = await Promise.all(preferredSymbols.map((item) => fetchTwelveQuote(item).catch(() => null)));
+    return fallbackRows.filter(Boolean);
   }
   try {
     const body = await fetchJson(`${OKX}/api/v5/market/tickers?instType=SPOT`);
@@ -1872,6 +2042,7 @@ const handle = async (request) => {
   if (request.method === "GET" && path === "/ml/export") return json(await mlExport(request, url), 200, request);
   if (request.method === "POST" && path === "/ml/import") return json(await mlImport(request), 200, request);
   if (request.method === "POST" && path === "/social/notify") return json(await notifySocialPost(request), 200, request);
+  if (request.method === "POST" && path === "/push/register") return json(await registerPushToken(request), 200, request);
   if (request.method === "GET" && path === "/notifications") return json(await listNotifications(request), 200, request);
   if (request.method === "POST" && path === "/notifications/read-all") return json(await markAllNotificationsRead(request), 200, request);
   const notificationReadMatch = path.match(/^\/notifications\/([^/]+)\/read$/);

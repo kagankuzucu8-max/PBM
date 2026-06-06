@@ -36,6 +36,15 @@ RESEND_API_KEY
 PBM_EMAIL_FROM
 ```
 
+Android uygulama push bildirimleri icin:
+
+```text
+FIREBASE_PROJECT_ID
+FIREBASE_SERVICE_ACCOUNT_JSON
+```
+
+`FIREBASE_SERVICE_ACCOUNT_JSON`, Firebase service-account JSON dosyasinin tamamini Cloudflare secret olarak saklamalidir. Frontend'e veya GitHub'a koyma.
+
 `PBM_SITE_URL`, canli uygulamanin tam adresi olmali:
 
 ```text
@@ -68,6 +77,12 @@ Yeni Social web bildirim merkezi icin Supabase SQL Editor'de bir kere calistir:
 
 ```text
 supabase/social_notifications_20260606.sql
+```
+
+Android push tokenlari icin:
+
+```text
+supabase/mobile_push_notifications_20260606.sql
 ```
 
 Tum sifir kurulum semasi:

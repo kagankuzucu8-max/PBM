@@ -5,7 +5,7 @@ const config: CapacitorConfig = {
   appName: "PBM",
   webDir: "build",
   server: {
-    url: process.env.PBM_MOBILE_URL || "https://pbm-marketdesk.kagankuzucu8-max.workers.dev",
+    url: process.env.PBM_MOBILE_URL || "https://pbmdesk.pbmsolutions.workers.dev",
     cleartext: false,
   },
   android: {

@@ -5,28 +5,20 @@ import { useAuth } from "@/context/AuthContext";
 import { SUPABASE_CONFIGURED } from "@/lib/supabase";
 
 export default function AuthPage() {
-  const [mode, setMode] = useState("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState(null);
-  const [info, setInfo] = useState(null);
   const [loading, setLoading] = useState(false);
-  const { signIn, signUp } = useAuth();
+  const { signIn } = useAuth();
   const navigate = useNavigate();
 
   const onSubmit = async (e) => {
     e.preventDefault();
     setError(null);
-    setInfo(null);
     setLoading(true);
     try {
-      if (mode === "signin") {
-        await signIn(email, password);
-        navigate("/");
-      } else {
-        await signUp(email, password);
-        setInfo("Check your email to confirm — or sign in directly if confirmations are disabled in Supabase.");
-      }
+      await signIn(email, password);
+      navigate("/");
     } catch (err) {
       setError(err.message || "Authentication failed");
     } finally {
@@ -36,7 +28,6 @@ export default function AuthPage() {
 
   return (
     <div className="min-h-screen grid lg:grid-cols-2 bg-[#FAFAFA]">
-      {/* Left: brand + visual */}
       <div className="hidden lg:flex relative overflow-hidden bg-zinc-950 text-white p-12 flex-col justify-between">
         <div
           className="absolute inset-0 opacity-30"
@@ -65,11 +56,11 @@ export default function AuthPage() {
           </div>
           <p className="mt-6 text-zinc-300 leading-relaxed text-sm">
             Live charts, classical indicators, and a Claude Sonnet 4.5 analyst that
-            tells you what the setup actually means — in one focused workspace.
+            tells you what the setup actually means - in one focused workspace.
           </p>
           <div className="mt-8 grid grid-cols-3 gap-3">
             {[
-              { k: "RSI · MACD", v: "Indicators" },
+              { k: "RSI / MACD", v: "Indicators" },
               { k: "Patterns", v: "AI engine" },
               { k: "Watchlists", v: "& alerts" },
             ].map((f) => (
@@ -81,11 +72,10 @@ export default function AuthPage() {
           </div>
         </div>
         <div className="relative text-[11px] tracking-[0.1em] uppercase text-zinc-500">
-          Not financial advice · Use at your own risk
+          Not financial advice / Use at your own risk
         </div>
       </div>
 
-      {/* Right: form */}
       <div className="flex items-center justify-center px-6 py-12">
         <div className="w-full max-w-sm">
           <div className="lg:hidden flex items-center gap-2.5 mb-10">
@@ -96,11 +86,9 @@ export default function AuthPage() {
           </div>
           <div className="mb-8">
             <h1 className="text-3xl font-heading font-extrabold tracking-tight text-zinc-950">
-              {mode === "signin" ? "Welcome back" : "Create your account"}
+              Welcome back
             </h1>
-            <p className="text-sm text-zinc-500 mt-2">
-              {mode === "signin" ? "Sign in to continue your analysis." : "Start analyzing markets in seconds."}
-            </p>
+            <p className="text-sm text-zinc-500 mt-2">Sign in to continue your analysis.</p>
           </div>
 
           {!SUPABASE_CONFIGURED && (
@@ -137,18 +125,13 @@ export default function AuthPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 data-testid="auth-password-input"
                 className="w-full px-3.5 py-2.5 bg-white border border-zinc-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:border-transparent transition-all"
-                placeholder="••••••••"
+                placeholder="********"
               />
             </div>
 
             {error && (
               <div className="text-xs text-rose-600 bg-rose-50 border border-rose-200 rounded-md px-3 py-2" data-testid="auth-error">
                 {error}
-              </div>
-            )}
-            {info && (
-              <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md px-3 py-2" data-testid="auth-info">
-                {info}
               </div>
             )}
 
@@ -158,20 +141,18 @@ export default function AuthPage() {
               data-testid="auth-submit-btn"
               className="w-full flex items-center justify-center gap-2 bg-zinc-950 text-white py-2.5 rounded-md font-medium hover:bg-zinc-800 transition-colors disabled:opacity-60"
             >
-              {loading ? "Working…" : mode === "signin" ? "Sign in" : "Create account"}
+              {loading ? "Working..." : "Sign in"}
               <ArrowRight className="w-4 h-4" />
             </button>
           </form>
 
           <div className="mt-6 text-center text-sm text-zinc-500">
-            {mode === "signin" ? "New to PBM?" : "Already have an account?"}{" "}
-            <button
-              onClick={() => { setMode(mode === "signin" ? "signup" : "signin"); setError(null); setInfo(null); }}
-              data-testid="auth-mode-toggle"
-              className="font-medium text-zinc-950 hover:underline"
-            >
-              {mode === "signin" ? "Create one" : "Sign in"}
-            </button>
+            Closed beta access only.
+            <div className="mt-2 text-xs">
+              <a href="/privacy.html" className="font-medium text-zinc-950 hover:underline">Privacy</a>
+              <span className="mx-2 text-zinc-300">/</span>
+              <a href="/account-deletion.html" className="font-medium text-zinc-950 hover:underline">Account deletion</a>
+            </div>
           </div>
         </div>
       </div>

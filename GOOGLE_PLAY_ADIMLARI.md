@@ -59,12 +59,15 @@ Android Studio:
 ```text
 Build > Generate Signed App Bundle or APK
 Android App Bundle
-Create new keystore
-release
+Create new...
+Key store path: C:\Users\Excalibur\Documents\PBM_RELEASE_KEY\pbm-upload-key.jks
+Alias: pbm-upload
+Validity: en az 25 yil
+Build variant: release
 Finish
 ```
 
-Keystore dosyasini ve sifresini guvenli yerde sakla. GitHub'a yukleme.
+Keystore dosyasini ve sifresini en az iki guvenli yerde sakla. GitHub'a, Cloudflare'a veya Supabase'e yukleme.
 
 Olusan dosya genellikle:
 
@@ -80,7 +83,22 @@ frontend/android/app/release/app-release.aab
 4. Store listing, privacy policy, data safety, content rating ve financial features formlarini doldur.
 5. Internal testing veya Closed testing kanalini ac.
 6. `app-release.aab` dosyasini yukle.
-7. Test kullanicilarini ekle ve review'e gonder.
+7. App access alaninda Google inceleme ekibi icin normal bir beta kullanicisi girisi ver. Admin hesabini verme.
+8. Test kullanicilarini ekle ve review'e gonder.
+
+Yeni bir kisisel Google Play gelistirici hesabi 13 Kasim 2023 sonrasinda acildiysa, Production erisimi icin Closed testing kanalinda en az 12 test kullanicisinin 14 gun boyunca kesintisiz opt-in kalmasi gerekir. Closed beta yayinini hemen baslatabilirsin; Production daha sonra acilir.
+
+Google Play formlarinda kullanilacak URL'ler:
+
+```text
+Privacy policy:
+https://pbmdesk.pbmsolutions.workers.dev/privacy.html
+
+Account deletion:
+https://pbmdesk.pbmsolutions.workers.dev/account-deletion.html
+```
+
+Bu iki URL'nin gercek politika sayfalarini gosterdigini kontrol etmeden review'e gonderme.
 
 ## GitHub ve mobil guncelleme mantigi
 

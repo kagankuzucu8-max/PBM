@@ -23,6 +23,18 @@ try {
   npm.cmd run mobile:assets
   npm.cmd run mobile:sync
 
+  $adaptiveIcons = @(
+    (Join-Path $android "app\src\main\res\mipmap-anydpi-v26\ic_launcher.xml"),
+    (Join-Path $android "app\src\main\res\mipmap-anydpi-v26\ic_launcher_round.xml")
+  )
+  foreach ($adaptiveIcon in $adaptiveIcons) {
+    if (Test-Path $adaptiveIcon) {
+      $iconXml = Get-Content -LiteralPath $adaptiveIcon -Raw
+      $iconXml = $iconXml.Replace("@mipmap/ic_launcher_background", "@color/ic_launcher_background")
+      Set-Content -LiteralPath $adaptiveIcon -Value $iconXml -Encoding UTF8
+    }
+  }
+
   $drawable = Join-Path $android "app\src\main\res\drawable"
   New-Item -ItemType Directory -Path $drawable -Force | Out-Null
   @'

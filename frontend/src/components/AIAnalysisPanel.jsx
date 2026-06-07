@@ -1,5 +1,5 @@
 import React from "react";
-import { Sparkles, TrendingUp, TrendingDown, Minus, AlertTriangle, Target, Loader2 } from "lucide-react";
+import { Sparkles, TrendingUp, TrendingDown, Minus, AlertTriangle, Target, Loader2, RefreshCw } from "lucide-react";
 import { verdictLabel, verdictTone, fmtPrice } from "@/lib/format";
 
 function VerdictBadge({ verdict, confidence }) {
@@ -98,6 +98,58 @@ export default function AIAnalysisPanel({ analysis, loading, onRun, lastUpdated,
             <div className="text-[11px] tracking-[0.1em] uppercase font-semibold text-slate-500 mb-2">Executive Summary</div>
             <p className="text-sm text-slate-800 leading-relaxed" data-testid="ai-summary">{analysis.summary}</p>
           </div>
+
+          {analysis.change_tracking && (
+            <div className="bg-white border border-slate-200 rounded-md p-4" data-testid="analysis-change-tracking">
+              <div className="flex items-start justify-between gap-4 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <RefreshCw className="w-4 h-4 text-slate-600" strokeWidth={1.75} />
+                  <div>
+                    <div className="text-[11px] tracking-[0.1em] uppercase font-semibold text-slate-500">Analysis Change</div>
+                    <div className="text-sm font-semibold text-slate-950 mt-0.5 capitalize">
+                      {analysis.change_tracking.direction}
+                    </div>
+                  </div>
+                </div>
+                {analysis.change_tracking.score_delta != null && (
+                  <div className="text-right">
+                    <div className="text-[11px] uppercase font-semibold text-slate-500">Score change</div>
+                    <div className={`text-xl font-semibold tabular-nums ${
+                      analysis.change_tracking.score_delta > 0
+                        ? "text-emerald-600"
+                        : analysis.change_tracking.score_delta < 0
+                          ? "text-rose-600"
+                          : "text-slate-700"
+                    }`}>
+                      {analysis.change_tracking.score_delta > 0 ? "+" : ""}
+                      {analysis.change_tracking.score_delta.toFixed(0)}
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="grid sm:grid-cols-2 gap-3 mt-4">
+                <div className="bg-slate-50 border border-slate-200 rounded-md p-3">
+                  <div className="text-[11px] uppercase font-semibold text-slate-500">Previous</div>
+                  <div className="text-sm font-semibold text-slate-900 mt-1">
+                    {verdictLabel(analysis.change_tracking.previous_verdict)}
+                    {analysis.change_tracking.previous_score != null && ` / ${analysis.change_tracking.previous_score.toFixed(0)}`}
+                  </div>
+                </div>
+                <div className="bg-slate-50 border border-slate-200 rounded-md p-3">
+                  <div className="text-[11px] uppercase font-semibold text-slate-500">Current</div>
+                  <div className="text-sm font-semibold text-slate-900 mt-1">
+                    {verdictLabel(analysis.change_tracking.current_verdict)}
+                    {analysis.change_tracking.current_score != null && ` / ${analysis.change_tracking.current_score.toFixed(0)}`}
+                  </div>
+                </div>
+              </div>
+              <div className="space-y-1.5 mt-3">
+                {analysis.change_tracking.notes?.map((note) => (
+                  <div key={note} className="text-xs text-slate-600 leading-relaxed">{note}</div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="grid sm:grid-cols-2 gap-5">
             <div>

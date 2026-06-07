@@ -347,7 +347,7 @@ const sendSocialEmail = async (to, post, senderEmail) => {
   const timeframe = htmlEscape(post.timeframe || "1h");
   const bias = htmlEscape(post.bias || "neutral");
   const score = post.confidence == null || post.confidence === "" ? "" : ` / Score: ${htmlEscape(post.confidence)}`;
-  const summary = htmlEscape(post.summary || "New PBM position update is live.");
+  const summary = htmlEscape(post.summary || "A new PBM Market Drop is live.");
   const imageUrl = String(post.image_url || "");
   const safeImageUrl = /^https?:\/\//i.test(imageUrl) ? htmlEscape(imageUrl) : "";
 
@@ -355,8 +355,8 @@ const sendSocialEmail = async (to, post, senderEmail) => {
     `<div style="font-family:Arial,sans-serif;background:#fafafa;padding:28px;color:#18181b">`,
     `<div style="max-width:640px;margin:0 auto;background:#fff;border:1px solid #e4e4e7;border-radius:8px;overflow:hidden">`,
     `<div style="padding:18px 20px;border-bottom:1px solid #f4f4f5">`,
-    `<div style="font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#71717a;font-weight:700">PBM Social</div>`,
-    `<h1 style="font-size:24px;line-height:1.2;margin:6px 0 0;color:#09090b">${symbol} position update</h1>`,
+    `<div style="font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#71717a;font-weight:700">PBM Market Drop</div>`,
+    `<h1 style="font-size:24px;line-height:1.2;margin:6px 0 0;color:#09090b">${symbol} market update</h1>`,
     `</div>`,
     safeImageUrl ? `<img src="${safeImageUrl}" alt="${symbol}" style="display:block;width:100%;height:auto;border-bottom:1px solid #f4f4f5" />` : "",
     `<div style="padding:20px">`,
@@ -376,7 +376,7 @@ const sendSocialEmail = async (to, post, senderEmail) => {
     body: JSON.stringify({
       from,
       to: [to],
-      subject: `PBM Social: ${post.symbol || "New position update"}`,
+      subject: `PBM Market Drop: ${post.symbol || "New market update"}`,
       html,
     }),
   });
@@ -392,12 +392,12 @@ const createWebNotifications = async (recipients, post, senderEmail) => {
   const symbol = String(post.symbol || "PBM").trim().toUpperCase();
   const timeframe = String(post.timeframe || "1h").trim();
   const bias = String(post.bias || "neutral").trim();
-  const body = String(post.summary || `${timeframe} ${bias} position update`).trim().slice(0, 500);
+  const body = String(post.summary || `${timeframe} ${bias} market update`).trim().slice(0, 500);
   const rows = recipients.map((recipientEmail) => ({
     recipient_email: recipientEmail,
     sender_email: senderEmail,
-    type: "social_post",
-    title: `${symbol} position update`,
+    type: "market_drop",
+    title: `PBM Market Drop: ${symbol}`,
     body,
     href: "/social",
     payload: {
@@ -515,13 +515,13 @@ const sendFirebasePush = async (device, post) => {
       message: {
         token: device.token,
         notification: {
-          title: `${symbol} position update`,
-          body: String(post.summary || `${post.timeframe || "1h"} ${post.bias || "neutral"} PBM update`).slice(0, 180),
+          title: `PBM Market Drop: ${symbol}`,
+          body: String(post.summary || `${post.timeframe || "1h"} ${post.bias || "neutral"} market update`).slice(0, 180),
           ...(post.image_url ? { image: post.image_url } : {}),
         },
         data: {
           href: "/social",
-          type: "social_post",
+          type: "market_drop",
           post_id: String(post.post_id || post.id || ""),
           symbol,
           timeframe: String(post.timeframe || "1h"),

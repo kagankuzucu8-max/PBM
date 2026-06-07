@@ -206,7 +206,7 @@ export default function SocialPage() {
       <div className="mb-5 md:mb-6">
         <div className="text-[11px] tracking-[0.1em] uppercase font-semibold text-zinc-500">Community</div>
         <h1 className="text-4xl font-heading font-extrabold tracking-tight text-zinc-950 mt-1">Social</h1>
-        <p className="text-sm text-zinc-500 mt-1.5">Live PBM position updates and market notes.</p>
+        <p className="text-sm text-zinc-500 mt-1.5">Live PBM Market Drops, position updates and market notes.</p>
       </div>
 
       <div className="grid xl:grid-cols-[minmax(0,720px)_320px] gap-5 items-start justify-center">
@@ -240,7 +240,7 @@ export default function SocialPage() {
                     value={form.summary}
                     onChange={(event) => setForm({ ...form, summary: event.target.value })}
                     rows={2}
-                    placeholder="Share a position update..."
+                    placeholder="Publish a PBM Market Drop..."
                     className="w-full px-0 py-1 text-base bg-white border-0 focus:outline-none resize-none placeholder:text-zinc-400"
                   />
                   {previewUrl && (
@@ -346,7 +346,7 @@ export default function SocialPage() {
               </div>
               <div className="text-xs text-zinc-400 mt-0.5">@pbm</div>
               <p className="text-sm text-zinc-600 leading-relaxed mt-4">
-                Official PBM position channel. New posts are delivered to web, mobile and email notifications.
+                Official PBM Market Drop channel. New posts are delivered to web, mobile and email notifications.
               </p>
               <div className="flex items-center gap-4 mt-4 text-xs text-zinc-500">
                 <span><strong className="text-zinc-950 tabular-nums">{posts.length}</strong> posts</span>
@@ -360,7 +360,7 @@ export default function SocialPage() {
             <div className="p-5">
               <BellRing className="w-5 h-5 text-zinc-700" strokeWidth={1.75} />
               <p className="text-sm text-zinc-600 leading-relaxed mt-3">
-                Every PBM post is sent to the notification center. Members with mobile and email alerts enabled receive it there too.
+                Every PBM Market Drop is sent to the notification center. Members with mobile and email alerts enabled receive it there too.
               </p>
               {!canPost && <div className="mt-4 px-3 py-2.5 border border-zinc-200 rounded-md text-xs text-zinc-500">This channel is read-only for your account.</div>}
             </div>

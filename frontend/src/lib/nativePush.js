@@ -41,8 +41,8 @@ export async function initializeNativePush(onOpen) {
   if (platform() === "android") {
     await PushNotifications.createChannel({
       id: "pbm_social",
-      name: "PBM Social",
-      description: "PBM position and market update notifications",
+      name: "PBM Market Drops",
+      description: "PBM Market Drop and position update notifications",
       importance: 4,
       visibility: 1,
       vibration: true,
@@ -59,8 +59,8 @@ export async function enableNativePush() {
   if (platform() === "android") {
     await PushNotifications.createChannel({
       id: "pbm_social",
-      name: "PBM Social",
-      description: "PBM position and market update notifications",
+      name: "PBM Market Drops",
+      description: "PBM Market Drop and position update notifications",
       importance: 4,
       visibility: 1,
       vibration: true,

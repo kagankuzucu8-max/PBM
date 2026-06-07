@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { FileUp, Plus, Trash2 } from "lucide-react";
+import { AlertTriangle, BarChart3, CheckCircle2, FileUp, Plus, Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { getMarketType } from "@/lib/market";
@@ -69,6 +69,8 @@ export default function JournalPage() {
       winRate: withPnl.length ? (wins / withPnl.length) * 100 : 0,
     };
   }, [entries]);
+
+  const weeklyReport = useMemo(() => buildWeeklyReport(entries), [entries]);
 
   const addEntry = async (event) => {
     event.preventDefault();
@@ -142,6 +144,45 @@ export default function JournalPage() {
         <Stat label="Trades" value={stats.count.toLocaleString()} />
         <Stat label="Total P&L" value={`$${fmtPrice(stats.total, 2)}`} tone={stats.total >= 0 ? "bullish" : "bearish"} />
         <Stat label="Win Rate" value={`${stats.winRate.toFixed(1)}%`} />
+      </div>
+
+      <div className="bg-white border border-zinc-200 rounded-lg overflow-hidden" data-testid="weekly-trader-report">
+        <div className="px-5 py-3.5 border-b border-zinc-100 flex items-center justify-between gap-4 flex-wrap">
+          <div>
+            <div className="text-[11px] tracking-[0.1em] uppercase font-semibold text-zinc-500">Last 7 days</div>
+            <div className="font-heading font-bold text-lg tracking-tight text-zinc-950 mt-0.5">Weekly Trader Report</div>
+          </div>
+          <div className="text-xs text-zinc-500 tabular-nums">
+            Discipline <span className="font-semibold text-zinc-950">{weeklyReport.disciplineScore}/100</span>
+          </div>
+        </div>
+        <div className="grid lg:grid-cols-4 divide-y lg:divide-y-0 lg:divide-x divide-zinc-100">
+          <ReportStat label="Weekly trades" value={weeklyReport.count} detail={`${weeklyReport.documented} documented`} />
+          <ReportStat
+            label="Weekly P&L"
+            value={`$${fmtPrice(weeklyReport.totalPnl, 2)}`}
+            detail={weeklyReport.pnlChangeLabel}
+            tone={weeklyReport.totalPnl >= 0 ? "bullish" : "bearish"}
+          />
+          <ReportStat label="Win rate" value={`${weeklyReport.winRate.toFixed(1)}%`} detail={weeklyReport.winRateChangeLabel} />
+          <ReportStat label="Most traded" value={weeklyReport.topSymbol || "-"} detail={weeklyReport.topStrategy || "No strategy data"} />
+        </div>
+        <div className="grid md:grid-cols-2 border-t border-zinc-100">
+          <div className="p-5 md:border-r border-zinc-100">
+            <div className="flex items-center gap-2 text-[11px] tracking-[0.1em] uppercase font-semibold text-zinc-500">
+              <CheckCircle2 className="w-4 h-4 text-zinc-600" strokeWidth={1.75} />
+              Strongest habit
+            </div>
+            <p className="text-sm text-zinc-700 leading-relaxed mt-2">{weeklyReport.strongestHabit}</p>
+          </div>
+          <div className="p-5">
+            <div className="flex items-center gap-2 text-[11px] tracking-[0.1em] uppercase font-semibold text-zinc-500">
+              <AlertTriangle className="w-4 h-4 text-zinc-600" strokeWidth={1.75} />
+              Review focus
+            </div>
+            <p className="text-sm text-zinc-700 leading-relaxed mt-2">{weeklyReport.reviewFocus}</p>
+          </div>
+        </div>
       </div>
 
       <div className="bg-white border border-zinc-200 rounded-lg overflow-hidden">
@@ -226,6 +267,111 @@ function Stat({ label, value, tone }) {
       </div>
     </div>
   );
+}
+
+function ReportStat({ label, value, detail, tone }) {
+  return (
+    <div className="p-5">
+      <div className="flex items-center gap-2 text-[11px] tracking-[0.08em] uppercase font-semibold text-zinc-500">
+        <BarChart3 className="w-3.5 h-3.5" strokeWidth={1.75} />
+        {label}
+      </div>
+      <div className={`text-xl font-heading font-bold tabular-nums tracking-tight mt-2 ${
+        tone === "bullish" ? "text-emerald-600" : tone === "bearish" ? "text-rose-600" : "text-zinc-950"
+      }`}>
+        {value}
+      </div>
+      <div className="text-xs text-zinc-400 mt-1">{detail}</div>
+    </div>
+  );
+}
+
+function buildWeeklyReport(entries) {
+  const now = Date.now();
+  const week = 7 * 24 * 60 * 60 * 1000;
+  const current = entries.filter((entry) => {
+    const time = new Date(entry.trade_date || entry.created_at).getTime();
+    return Number.isFinite(time) && time >= now - week;
+  });
+  const previous = entries.filter((entry) => {
+    const time = new Date(entry.trade_date || entry.created_at).getTime();
+    return Number.isFinite(time) && time >= now - week * 2 && time < now - week;
+  });
+  const currentWithPnl = current.filter((entry) => entry.pnl != null && Number.isFinite(Number(entry.pnl)));
+  const previousWithPnl = previous.filter((entry) => entry.pnl != null && Number.isFinite(Number(entry.pnl)));
+  const totalPnl = currentWithPnl.reduce((sum, entry) => sum + Number(entry.pnl), 0);
+  const previousPnl = previousWithPnl.reduce((sum, entry) => sum + Number(entry.pnl), 0);
+  const wins = currentWithPnl.filter((entry) => Number(entry.pnl) > 0).length;
+  const previousWins = previousWithPnl.filter((entry) => Number(entry.pnl) > 0).length;
+  const winRate = currentWithPnl.length ? (wins / currentWithPnl.length) * 100 : 0;
+  const previousWinRate = previousWithPnl.length ? (previousWins / previousWithPnl.length) * 100 : 0;
+  const documented = current.filter((entry) => String(entry.strategy || "").trim() && String(entry.notes || "").trim()).length;
+  const documentationRate = current.length ? documented / current.length : 0;
+  const disciplineScore = current.length
+    ? Math.round(Math.min(100, 35 + documentationRate * 45 + Math.min(current.length, 10) * 2))
+    : 0;
+  const topSymbol = mostFrequent(current.map((entry) => entry.symbol).filter(Boolean));
+  const topStrategy = mostFrequent(current.map((entry) => entry.strategy).filter(Boolean));
+  const mistake = findFrequentMistake(current);
+
+  const pnlDelta = totalPnl - previousPnl;
+  const winRateDelta = winRate - previousWinRate;
+  const strongestHabit = current.length === 0
+    ? "Add trades during the week to build a personal performance report."
+    : documentationRate >= 0.7
+      ? `${Math.round(documentationRate * 100)}% of this week's trades include both strategy and notes.`
+      : winRate >= 55
+        ? `Execution converted ${winRate.toFixed(1)}% of recorded trades into wins.`
+        : `${current.length} trades were captured, giving PBM more data for the next review.`;
+  const reviewFocus = current.length === 0
+    ? "No weekly trades yet. Start with one fully documented journal entry."
+    : mistake
+      ? `Review repeated "${mistake}" notes before the next session.`
+      : documentationRate < 0.7
+        ? "Add strategy and notes to every trade so discipline patterns become measurable."
+        : totalPnl < 0
+          ? "Review losing trades by setup and session before increasing risk."
+          : "Keep the same documentation quality and review whether winners followed the original plan.";
+
+  return {
+    count: current.length,
+    documented,
+    totalPnl,
+    winRate,
+    disciplineScore,
+    topSymbol,
+    topStrategy,
+    strongestHabit,
+    reviewFocus,
+    pnlChangeLabel: previous.length ? `${pnlDelta >= 0 ? "+" : ""}$${fmtPrice(pnlDelta, 2)} vs prior week` : "First measured week",
+    winRateChangeLabel: previousWithPnl.length ? `${winRateDelta >= 0 ? "+" : ""}${winRateDelta.toFixed(1)} pts vs prior week` : "First measured week",
+  };
+}
+
+function mostFrequent(values) {
+  const counts = values.reduce((map, value) => {
+    const key = String(value || "").trim();
+    if (key) map.set(key, (map.get(key) || 0) + 1);
+    return map;
+  }, new Map());
+  return [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || "";
+}
+
+function findFrequentMistake(entries) {
+  const labels = [
+    ["early entry", /early entry|entered early/i],
+    ["FOMO", /\bfomo\b|chased/i],
+    ["revenge trade", /revenge/i],
+    ["late entry", /late entry|entered late/i],
+    ["stop too tight", /stop too tight|tight stop/i],
+    ["no confirmation", /no confirmation|without confirmation/i],
+    ["news volatility", /news|volatility/i],
+  ];
+  const notes = entries.map((entry) => `${entry.strategy || ""} ${entry.notes || ""}`).join("\n");
+  return labels
+    .map(([label, pattern]) => [label, (notes.match(new RegExp(pattern.source, "gi")) || []).length])
+    .sort((a, b) => b[1] - a[1])
+    .find(([, count]) => count > 0)?.[0] || "";
 }
 
 function parseCsv(text) {

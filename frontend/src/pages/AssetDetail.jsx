@@ -11,6 +11,7 @@ import { analyzeAsset } from "@/lib/api";
 import { fmtPrice, fmtPct, fmtVol, fmtDate } from "@/lib/format";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
+import { buildAnalysisChange } from "@/lib/analysisChange";
 
 export default function AssetDetail() {
   const { symbol } = useParams();
@@ -27,6 +28,7 @@ export default function AssetDetail() {
   const [lastUpdated, setLastUpdated] = useState(null);
   const [watchlists, setWatchlists] = useState([]);
   const [inWatchlist, setInWatchlist] = useState(false);
+  const [previousAnalysis, setPreviousAnalysis] = useState(null);
 
   // Load OHLC + ticker
   useEffect(() => {
@@ -68,6 +70,26 @@ export default function AssetDetail() {
     })();
   }, [user, symbol]);
 
+  useEffect(() => {
+    if (!user) return;
+    let alive = true;
+    setPreviousAnalysis(null);
+    supabase
+      .from("analysis_history")
+      .select("*")
+      .eq("user_id", user.id)
+      .eq("symbol", symbol)
+      .eq("timeframe", timeframe)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .then(({ data }) => {
+        if (alive) setPreviousAnalysis(data?.[0] || null);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [user, symbol, timeframe]);
+
   const indicators = useMemo(() => computeIndicators(candles), [candles]);
   const marketType = useMemo(() => getMarketType(symbol), [symbol]);
   const marketLabel = useMemo(() => getMarketLabel(symbol), [symbol]);
@@ -93,7 +115,9 @@ export default function AssetDetail() {
         bypass_cache: Boolean(analysis),
       };
       const res = await analyzeAsset(payload);
-      setAnalysis(res);
+      const changeTracking = buildAnalysisChange(analysis || previousAnalysis, res);
+      const analysisWithChange = changeTracking ? { ...res, change_tracking: changeTracking } : res;
+      setAnalysis(analysisWithChange);
       setLastUpdated(new Date().toLocaleString());
       if (res.usage) refreshAccount().catch(() => {});
       // Save to Supabase history
@@ -106,7 +130,16 @@ export default function AssetDetail() {
           verdict: res.verdict,
           combined_score: res.combined_score,
           summary: res.summary,
-          payload: res,
+          payload: analysisWithChange,
+        });
+        setPreviousAnalysis({
+          symbol,
+          timeframe,
+          verdict: res.verdict,
+          combined_score: res.combined_score,
+          summary: res.summary,
+          payload: analysisWithChange,
+          created_at: new Date().toISOString(),
         });
       }
     } catch (e) {
@@ -114,7 +147,7 @@ export default function AssetDetail() {
     } finally {
       setAiLoading(false);
     }
-  }, [symbol, timeframe, ticker, indicators, candles, analysis, user, marketType, refreshAccount]);
+  }, [symbol, timeframe, ticker, indicators, candles, analysis, previousAnalysis, user, marketType, refreshAccount]);
 
   const toggleWatchlist = async () => {
     if (!user || watchlists.length === 0) {

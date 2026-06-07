@@ -4,6 +4,7 @@ import { History as HistoryIcon, ChevronRight } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { fmtDate, verdictLabel, verdictTone } from "@/lib/format";
+import { buildAnalysisChange } from "@/lib/analysisChange";
 
 const VERDICT_STYLES = {
   bullish: "bg-emerald-100 text-emerald-700",
@@ -53,6 +54,14 @@ export default function HistoryPage() {
             {items.map((it) => {
               const tone = verdictTone(it.verdict);
               const open = expanded === it.id;
+              const previous = items.find(
+                (candidate) =>
+                  candidate.id !== it.id &&
+                  candidate.symbol === it.symbol &&
+                  candidate.timeframe === it.timeframe &&
+                  new Date(candidate.created_at).getTime() < new Date(it.created_at).getTime(),
+              );
+              const change = it.payload?.change_tracking || buildAnalysisChange(previous, it);
               return (
                 <li key={it.id} data-testid={`history-row-${it.symbol}`}>
                   <button
@@ -84,6 +93,28 @@ export default function HistoryPage() {
                       <Section title="Short-term">{it.payload?.short_term_outlook || "—"}</Section>
                       <Section title="Medium-term">{it.payload?.medium_term_outlook || "—"}</Section>
                       <Section title="Risk">{it.payload?.risk_notes || "—"}</Section>
+                      {change && (
+                        <div className="sm:col-span-3 border border-zinc-200 bg-white rounded-md p-4">
+                          <div className="flex items-center justify-between gap-3 flex-wrap">
+                            <div>
+                              <div className="text-[11px] tracking-[0.1em] uppercase font-semibold text-zinc-500">Analysis change</div>
+                              <div className="text-sm font-semibold text-zinc-950 mt-1 capitalize">{change.direction}</div>
+                            </div>
+                            {change.score_delta != null && (
+                              <div className={`text-sm font-bold tabular-nums ${
+                                change.score_delta > 0 ? "text-emerald-600" : change.score_delta < 0 ? "text-rose-600" : "text-zinc-700"
+                              }`}>
+                                {change.score_delta > 0 ? "+" : ""}{change.score_delta.toFixed(0)} score
+                              </div>
+                            )}
+                          </div>
+                          <div className="grid sm:grid-cols-2 gap-3 mt-3">
+                            {change.notes?.map((note) => (
+                              <div key={note} className="text-xs text-zinc-600 leading-relaxed">{note}</div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                       <div className="sm:col-span-3">
                         <button
                           onClick={() => navigate(`/asset/${it.symbol}`)}

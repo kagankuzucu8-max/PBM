@@ -2,9 +2,16 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Bell, BellRing, CheckCheck, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
-import { listNotifications, markAllNotificationsRead, markNotificationRead } from "@/lib/api";
+import {
+  getNotificationPreferences,
+  listNotifications,
+  markAllNotificationsRead,
+  markNotificationRead,
+  updateNotificationPreferences,
+} from "@/lib/api";
 import { fmtDate } from "@/lib/format";
 import { enableNativePush, getNativePushPermission } from "@/lib/nativePush";
+import { disableWebPush, enableWebPush } from "@/lib/webPush";
 
 export default function NotificationCenter({ className = "", browserAlerts = false, viewport = "all" }) {
   const navigate = useNavigate();
@@ -19,6 +26,13 @@ export default function NotificationCenter({ className = "", browserAlerts = fal
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [nativePermission, setNativePermission] = useState("prompt");
+  const [preferences, setPreferences] = useState({
+    email_enabled: true,
+    web_push_enabled: false,
+    native_push_enabled: true,
+  });
+  const [preferenceError, setPreferenceError] = useState("");
+  const [savingPreference, setSavingPreference] = useState("");
   const initialized = useRef(false);
   const latestId = useRef("");
   const unread = useMemo(() => items.filter((item) => !item.read_at).length, [items]);
@@ -88,6 +102,21 @@ export default function NotificationCenter({ className = "", browserAlerts = fal
       .catch(() => setNativePermission("prompt"));
   }, [viewportActive]);
 
+  const reloadPreferences = useCallback(async () => {
+    if (!viewportActive) return;
+    try {
+      const next = await getNotificationPreferences();
+      setPreferences((current) => ({ ...current, ...next }));
+      setPreferenceError("");
+    } catch {
+      setPreferenceError("Run the latest PBM notification SQL to save preferences.");
+    }
+  }, [viewportActive]);
+
+  useEffect(() => {
+    reloadPreferences();
+  }, [reloadPreferences]);
+
   const openItem = async (item) => {
     if (!item.read_at) {
       setItems((current) =>
@@ -105,16 +134,26 @@ export default function NotificationCenter({ className = "", browserAlerts = fal
     await markAllNotificationsRead().catch(() => reload());
   };
 
-  const enableBrowserAlerts = async () => {
-    if (Capacitor.isNativePlatform()) {
-      const result = await enableNativePush();
-      setNativePermission(result.permission || "prompt");
-      setOpen(false);
-      return;
+  const setPreference = async (key, enabled) => {
+    setSavingPreference(key);
+    setPreferenceError("");
+    try {
+      if (key === "web_push_enabled") {
+        if (enabled) await enableWebPush();
+        else await disableWebPush();
+      }
+      if (key === "native_push_enabled" && enabled) {
+        const result = await enableNativePush();
+        setNativePermission(result.permission || "prompt");
+      }
+      const next = { ...preferences, [key]: enabled };
+      const saved = await updateNotificationPreferences(next);
+      setPreferences((current) => ({ ...current, ...saved }));
+    } catch (err) {
+      setPreferenceError(err.response?.data?.detail || err.message || "Notification preference could not be saved.");
+    } finally {
+      setSavingPreference("");
     }
-    if (!("Notification" in window)) return;
-    await Notification.requestPermission();
-    setOpen(false);
   };
 
   return (
@@ -175,26 +214,37 @@ export default function NotificationCenter({ className = "", browserAlerts = fal
             </div>
 
             {browserAlerts && (
-              (Capacitor.isNativePlatform() && nativePermission !== "granted") ||
-              (!Capacitor.isNativePlatform() && "Notification" in window && Notification.permission !== "granted")
-            ) && (
-              <button
-                type="button"
-                onClick={enableBrowserAlerts}
-                className="mx-4 mt-4 px-3 py-2.5 rounded-md border border-zinc-200 text-left flex items-center gap-3 hover:bg-zinc-50 transition-colors"
-              >
-                <BellRing className="w-4 h-4 text-zinc-700 shrink-0" />
-                <span>
-                  <span className="block text-sm font-semibold text-zinc-950">
-                    {Capacitor.isNativePlatform() ? "Enable mobile alerts" : "Enable browser alerts"}
-                  </span>
-                  <span className="block text-xs text-zinc-500 mt-0.5">
-                    {Capacitor.isNativePlatform()
-                      ? "Receive PBM posts even when the app is closed."
-                      : "Show new PBM posts while the app is open."}
-                  </span>
-                </span>
-              </button>
+              <div className="mx-4 mt-4 rounded-md border border-zinc-200 overflow-hidden">
+                <div className="px-3 py-2.5 border-b border-zinc-100 flex items-center gap-2">
+                  <BellRing className="w-4 h-4 text-zinc-700 shrink-0" />
+                  <span className="text-sm font-semibold text-zinc-950">Delivery channels</span>
+                </div>
+                <PreferenceRow
+                  label="Email notifications"
+                  detail="Receive each PBM Market Drop by email."
+                  enabled={preferences.email_enabled}
+                  saving={savingPreference === "email_enabled"}
+                  onChange={(enabled) => setPreference("email_enabled", enabled)}
+                />
+                {Capacitor.isNativePlatform() ? (
+                  <PreferenceRow
+                    label="Mobile app notifications"
+                    detail={nativePermission === "granted" ? "Enabled for this device." : "Receive alerts while the app is closed."}
+                    enabled={preferences.native_push_enabled}
+                    saving={savingPreference === "native_push_enabled"}
+                    onChange={(enabled) => setPreference("native_push_enabled", enabled)}
+                  />
+                ) : (
+                  <PreferenceRow
+                    label="Home screen notifications"
+                    detail="Receive alerts after adding PBM to your home screen."
+                    enabled={preferences.web_push_enabled}
+                    saving={savingPreference === "web_push_enabled"}
+                    onChange={(enabled) => setPreference("web_push_enabled", enabled)}
+                  />
+                )}
+                {preferenceError && <div className="px-3 py-2.5 border-t border-rose-100 bg-rose-50 text-xs text-rose-700">{preferenceError}</div>}
+              </div>
             )}
 
             <div className="flex-1 overflow-y-auto">
@@ -232,5 +282,27 @@ export default function NotificationCenter({ className = "", browserAlerts = fal
         </div>
       )}
     </>
+  );
+}
+
+function PreferenceRow({ label, detail, enabled, saving, onChange }) {
+  return (
+    <div className="px-3 py-2.5 border-b last:border-b-0 border-zinc-100 flex items-center justify-between gap-3">
+      <div className="min-w-0">
+        <div className="text-sm font-medium text-zinc-900">{label}</div>
+        <div className="text-xs text-zinc-500 mt-0.5">{detail}</div>
+      </div>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={enabled}
+        disabled={saving}
+        onClick={() => onChange(!enabled)}
+        className={`relative w-10 h-6 rounded-full shrink-0 transition-colors disabled:opacity-50 ${enabled ? "bg-zinc-950" : "bg-zinc-200"}`}
+        aria-label={label}
+      >
+        <span className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${enabled ? "translate-x-5" : "translate-x-1"}`} />
+      </button>
+    </div>
   );
 }

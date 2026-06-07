@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { BadgeCheck, BellRing, Expand, ImagePlus, Radio, Send, Trash2, X } from "lucide-react";
+import { BadgeCheck, BellRing, Expand, ImagePlus, Minus, Plus, Radio, RotateCcw, Send, Trash2, X } from "lucide-react";
+import { TransformComponent, TransformWrapper } from "react-zoom-pan-pinch";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { getMarketType } from "@/lib/market";
@@ -369,22 +370,53 @@ export default function SocialPage() {
       </div>
 
       {activeImage && (
-        <div className="fixed inset-0 bg-zinc-950/70 z-50 flex items-center justify-center p-4 md:p-6" onClick={() => setActiveImage(null)}>
-          <div className="bg-white border border-zinc-200 rounded-lg overflow-hidden max-w-5xl w-full" onClick={(event) => event.stopPropagation()}>
+        <div className="fixed inset-0 bg-zinc-950/70 z-50 overflow-y-auto overscroll-contain p-3 md:p-6" onClick={() => setActiveImage(null)}>
+          <div className="bg-white border border-zinc-200 rounded-lg overflow-hidden max-w-5xl w-full min-h-0 mx-auto my-auto" onClick={(event) => event.stopPropagation()}>
             <div className="px-5 py-3.5 border-b border-zinc-100 flex items-center justify-between">
               <div>
                 <div className="text-[11px] tracking-[0.1em] uppercase font-semibold text-zinc-500">Position snapshot</div>
                 <div className="font-semibold tabular-nums text-zinc-950 mt-0.5">{activeImage.symbol}</div>
               </div>
-              <button onClick={() => setActiveImage(null)} className="p-2 text-zinc-500 hover:text-zinc-950 transition-colors" aria-label="Close image"><X className="w-4 h-4" /></button>
             </div>
-            <div className="bg-zinc-50">
-              <img src={activeImage.image_url} alt={activeImage.symbol} className="w-full max-h-[78vh] object-contain" />
-            </div>
+            <TransformWrapper initialScale={1} minScale={0.75} maxScale={5} centerOnInit wheel={{ step: 0.16 }} doubleClick={{ step: 0.8 }}>
+              {({ zoomIn, zoomOut, resetTransform }) => (
+                <>
+                  <div className="px-3 py-2 border-b border-zinc-100 flex items-center justify-between gap-2 bg-white">
+                    <div className="text-xs text-zinc-500">Pinch or use the controls to zoom.</div>
+                    <div className="flex items-center gap-1">
+                      <ZoomButton label="Zoom out" onClick={() => zoomOut()}><Minus className="w-4 h-4" /></ZoomButton>
+                      <ZoomButton label="Reset zoom" onClick={() => resetTransform()}><RotateCcw className="w-4 h-4" /></ZoomButton>
+                      <ZoomButton label="Zoom in" onClick={() => zoomIn()}><Plus className="w-4 h-4" /></ZoomButton>
+                      <ZoomButton label="Close image" onClick={() => setActiveImage(null)}><X className="w-4 h-4" /></ZoomButton>
+                    </div>
+                  </div>
+                  <TransformComponent
+                    wrapperClass="!w-full !h-[min(76vh,760px)] bg-zinc-50"
+                    contentClass="!w-full !h-full flex items-center justify-center"
+                  >
+                    <img src={activeImage.image_url} alt={activeImage.symbol} className="block max-w-full max-h-full object-contain select-none" draggable="false" />
+                  </TransformComponent>
+                </>
+              )}
+            </TransformWrapper>
           </div>
         </div>
       )}
     </div>
+  );
+}
+
+function ZoomButton({ label, onClick, children }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="w-8 h-8 inline-flex items-center justify-center rounded-md border border-zinc-200 text-zinc-600 hover:bg-zinc-50 hover:text-zinc-950"
+      aria-label={label}
+      title={label}
+    >
+      {children}
+    </button>
   );
 }
 

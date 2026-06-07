@@ -133,6 +133,16 @@ create table if not exists public.push_tokens (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.notification_preferences (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  recipient_email text not null,
+  email_enabled boolean not null default true,
+  web_push_enabled boolean not null default false,
+  native_push_enabled boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists public.journal_entries (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
@@ -188,6 +198,17 @@ create table if not exists public.education_videos (
   video_url text not null,
   youtube_id text not null,
   thumbnail_url text,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.tradingview_indicators (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  author_email text,
+  title text not null,
+  description text,
+  tradingview_url text not null,
+  banner_url text,
   created_at timestamptz not null default now()
 );
 
@@ -290,6 +311,8 @@ create index if not exists notifications_recipient_unread_idx
   on public.notifications (lower(recipient_email), read_at, created_at desc);
 create index if not exists push_tokens_recipient_active_idx
   on public.push_tokens (lower(recipient_email), active, updated_at desc);
+create index if not exists notification_preferences_recipient_idx
+  on public.notification_preferences (lower(recipient_email));
 create index if not exists journal_entries_user_date_idx
   on public.journal_entries (user_id, trade_date desc);
 create index if not exists payout_accounts_user_created_idx
@@ -298,6 +321,8 @@ create index if not exists payout_records_user_created_idx
   on public.payout_records (user_id, created_at desc);
 create index if not exists education_videos_created_idx
   on public.education_videos (created_at desc);
+create index if not exists tradingview_indicators_created_idx
+  on public.tradingview_indicators (created_at desc);
 create index if not exists pbm_brain_runs_user_created_idx
   on public.pbm_brain_runs (user_id, created_at desc);
 create index if not exists pbm_brain_memories_user_created_idx
@@ -322,10 +347,12 @@ alter table public.analysis_cache enable row level security;
 alter table public.social_posts enable row level security;
 alter table public.notifications enable row level security;
 alter table public.push_tokens enable row level security;
+alter table public.notification_preferences enable row level security;
 alter table public.journal_entries enable row level security;
 alter table public.payout_accounts enable row level security;
 alter table public.payout_records enable row level security;
 alter table public.education_videos enable row level security;
+alter table public.tradingview_indicators enable row level security;
 alter table public.pbm_brain_runs enable row level security;
 alter table public.pbm_brain_memories enable row level security;
 alter table public.pbm_brain_exports enable row level security;
@@ -339,7 +366,7 @@ begin
     select schemaname, tablename, policyname
     from pg_policies
     where schemaname='public'
-      and tablename in ('user_settings','beta_access','usage_events','watchlists','watchlist_items','alerts','analysis_history','analysis_cache','social_posts','notifications','push_tokens','journal_entries','payout_accounts','payout_records','education_videos','pbm_brain_runs','pbm_brain_memories','pbm_brain_exports','ai_teaching_feedback')
+      and tablename in ('user_settings','beta_access','usage_events','watchlists','watchlist_items','alerts','analysis_history','analysis_cache','social_posts','notifications','push_tokens','notification_preferences','journal_entries','payout_accounts','payout_records','education_videos','tradingview_indicators','pbm_brain_runs','pbm_brain_memories','pbm_brain_exports','ai_teaching_feedback')
   loop
     execute format('drop policy if exists %I on %I.%I', r.policyname, r.schemaname, r.tablename);
   end loop;
@@ -441,6 +468,15 @@ create policy "own push_tokens"
     and lower(recipient_email) = lower(coalesce((select auth.jwt() ->> 'email'), ''))
   );
 
+create policy "own notification_preferences"
+  on public.notification_preferences for all
+  to authenticated
+  using ((select auth.uid()) = user_id)
+  with check (
+    (select auth.uid()) = user_id
+    and lower(recipient_email) = lower(coalesce((select auth.jwt() ->> 'email'), ''))
+  );
+
 create policy "own journal_entries"
   on public.journal_entries for all
   to authenticated
@@ -492,6 +528,39 @@ create policy "own delete education_videos"
     and lower(coalesce((select auth.jwt() ->> 'email'), '')) = 'kagankuzucu8@gmail.com'
   );
 
+create policy "public read tradingview_indicators"
+  on public.tradingview_indicators for select
+  to anon, authenticated
+  using (true);
+
+create policy "admin insert tradingview_indicators"
+  on public.tradingview_indicators for insert
+  to authenticated
+  with check (
+    (select auth.uid()) = user_id
+    and lower(coalesce((select auth.jwt() ->> 'email'), '')) = 'kagankuzucu8@gmail.com'
+  );
+
+create policy "admin update tradingview_indicators"
+  on public.tradingview_indicators for update
+  to authenticated
+  using (
+    (select auth.uid()) = user_id
+    and lower(coalesce((select auth.jwt() ->> 'email'), '')) = 'kagankuzucu8@gmail.com'
+  )
+  with check (
+    (select auth.uid()) = user_id
+    and lower(coalesce((select auth.jwt() ->> 'email'), '')) = 'kagankuzucu8@gmail.com'
+  );
+
+create policy "admin delete tradingview_indicators"
+  on public.tradingview_indicators for delete
+  to authenticated
+  using (
+    (select auth.uid()) = user_id
+    and lower(coalesce((select auth.jwt() ->> 'email'), '')) = 'kagankuzucu8@gmail.com'
+  );
+
 create policy "own pbm_brain_runs"
   on public.pbm_brain_runs for all
   to authenticated
@@ -507,8 +576,14 @@ create policy "own pbm_brain_memories"
 create policy "own pbm_brain_exports"
   on public.pbm_brain_exports for all
   to authenticated
-  using ((select auth.uid()) = user_id)
-  with check ((select auth.uid()) = user_id);
+  using (
+    (select auth.uid()) = user_id
+    and lower(coalesce((select auth.jwt() ->> 'email'), '')) = 'kagankuzucu8@gmail.com'
+  )
+  with check (
+    (select auth.uid()) = user_id
+    and lower(coalesce((select auth.jwt() ->> 'email'), '')) = 'kagankuzucu8@gmail.com'
+  );
 
 create policy "own ai_teaching_feedback"
   on public.ai_teaching_feedback for all
@@ -553,6 +628,11 @@ create trigger analysis_cache_updated_at
 drop trigger if exists push_tokens_updated_at on public.push_tokens;
 create trigger push_tokens_updated_at
   before update on public.push_tokens
+  for each row execute function public.tg_set_updated_at();
+
+drop trigger if exists notification_preferences_updated_at on public.notification_preferences;
+create trigger notification_preferences_updated_at
+  before update on public.notification_preferences
   for each row execute function public.tg_set_updated_at();
 
 drop trigger if exists payout_accounts_updated_at on public.payout_accounts;
@@ -634,9 +714,15 @@ where lower(email) <> 'kagankuzucu8@gmail.com'
 create or replace function public.handle_new_user()
 returns trigger language plpgsql security definer set search_path = public as $$
 begin
+  insert into public.beta_access (email, role, status, weekly_ai_limit, daily_ai_limit, can_post_social, can_add_education, notes)
+    values (lower(coalesce(new.email, '')), 'user', 'active', 10, 10, false, false, 'Self-registered PBM account')
+    on conflict (email) do nothing;
   insert into public.user_settings (user_id) values (new.id)
     on conflict do nothing;
   insert into public.watchlists (user_id, name) values (new.id, 'My Watchlist')
+    on conflict do nothing;
+  insert into public.notification_preferences (user_id, recipient_email)
+    values (new.id, lower(coalesce(new.email, '')))
     on conflict do nothing;
   return new;
 end $$;

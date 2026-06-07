@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from "react";
-import { Save, Database, Key } from "lucide-react";
+import React, { useCallback, useEffect, useState } from "react";
+import { Activity, Database, Key, RefreshCw, Save } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { TIMEFRAMES } from "@/lib/market";
+import { getSystemHealth } from "@/lib/api";
 
 export default function Settings() {
   const { user, isAdmin } = useAuth();
@@ -10,6 +11,9 @@ export default function Settings() {
   const [alphaKey, setAlphaKey] = useState(localStorage.getItem("md.alpha_key") || "");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [health, setHealth] = useState(null);
+  const [healthLoading, setHealthLoading] = useState(false);
+  const [healthError, setHealthError] = useState("");
 
   useEffect(() => {
     if (!user) return;
@@ -18,6 +22,23 @@ export default function Settings() {
       if (data) setSettings({ default_timeframe: data.default_timeframe, default_market: data.default_market, theme: data.theme });
     })();
   }, [user]);
+
+  const loadHealth = useCallback(async () => {
+    if (!isAdmin) return;
+    setHealthLoading(true);
+    setHealthError("");
+    try {
+      setHealth(await getSystemHealth());
+    } catch (err) {
+      setHealthError(err.response?.data?.detail || err.message || "System health could not be checked.");
+    } finally {
+      setHealthLoading(false);
+    }
+  }, [isAdmin]);
+
+  useEffect(() => {
+    loadHealth();
+  }, [loadHealth]);
 
   const save = async () => {
     setSaving(true);
@@ -99,6 +120,49 @@ export default function Settings() {
         </div>
       </div>
 
+      <div className="bg-white border border-zinc-200 rounded-lg overflow-hidden">
+        <div className="px-5 py-3.5 border-b border-zinc-100 flex items-center justify-between gap-3">
+          <div className="text-[11px] tracking-[0.1em] uppercase font-semibold text-zinc-500 flex items-center gap-2">
+            <Activity className="w-3.5 h-3.5" /> System health
+          </div>
+          <button
+            type="button"
+            onClick={loadHealth}
+            disabled={healthLoading}
+            className="w-8 h-8 inline-flex items-center justify-center rounded-md border border-zinc-200 text-zinc-600 hover:bg-zinc-50 hover:text-zinc-950 disabled:opacity-50"
+            aria-label="Refresh system health"
+            title="Refresh system health"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${healthLoading ? "animate-spin" : ""}`} />
+          </button>
+        </div>
+        {healthError ? (
+          <div className="px-5 py-5 text-sm text-rose-700 bg-rose-50">{healthError}</div>
+        ) : healthLoading && !health ? (
+          <div className="px-5 py-12 text-center text-sm text-zinc-400">Checking services...</div>
+        ) : (
+          <div className="divide-y divide-zinc-100">
+            {Object.entries(health?.services || {}).map(([name, service]) => (
+              <div key={name} className="px-5 py-3.5 flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-zinc-950">{healthLabel(name)}</div>
+                  <div className="text-xs text-zinc-500 mt-0.5 break-words">{service.detail}</div>
+                </div>
+                <span className={`shrink-0 inline-flex items-center gap-1.5 text-xs font-semibold ${healthStatusClass(service.status)}`}>
+                  <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                  {service.status}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+        {health?.checked_at && (
+          <div className="px-5 py-3 border-t border-zinc-100 text-xs text-zinc-400 tabular-nums">
+            Last checked {new Date(health.checked_at).toLocaleString()}
+          </div>
+        )}
+      </div>
+
       <div className="flex items-center justify-between">
         <button
           onClick={save}
@@ -124,6 +188,19 @@ export default function Settings() {
       </div>
     </div>
   );
+}
+
+function healthLabel(value) {
+  return String(value)
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function healthStatusClass(status) {
+  if (status === "operational" || status === "configured") return "text-emerald-600";
+  if (status === "checking") return "text-zinc-400";
+  return "text-rose-600";
 }
 
 function Field({ label, children }) {

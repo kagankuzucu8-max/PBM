@@ -219,6 +219,7 @@ export function AuthProvider({ children }) {
     if (data.user) setUser(data.user);
     if (data.user) ensureUserBootstrap(data.user).catch(() => {});
     refreshAccount().catch(() => {});
+    return data;
   };
   const signOut = async () => {
     clearStoredSupabaseSession();

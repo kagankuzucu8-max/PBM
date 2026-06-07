@@ -210,17 +210,17 @@ export default function AITeachingPage() {
               const saved = feedbackByAnalysis.get(analysis.id);
               const draft = feedback[analysis.id] || {};
               return (
-                <div key={analysis.id} className="p-5">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
+                <div key={analysis.id} className="p-4 md:p-5 min-w-0">
+                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-4 min-w-0">
+                    <div className="min-w-0">
                       <div className="font-semibold tabular-nums text-zinc-950">{analysis.symbol}</div>
-                      <div className="text-xs text-zinc-500 mt-0.5">
+                      <div className="text-xs text-zinc-500 mt-0.5 break-words">
                         {analysis.timeframe} / {analysis.verdict} / Score {Number(analysis.combined_score || 0).toFixed(0)}
                       </div>
                     </div>
-                    <div className="text-xs text-zinc-400 tabular-nums">{fmtDate(analysis.created_at)}</div>
+                    <div className="text-xs text-zinc-400 tabular-nums shrink-0">{fmtDate(analysis.created_at)}</div>
                   </div>
-                  {analysis.summary && <p className="text-sm text-zinc-700 leading-relaxed mt-3">{analysis.summary}</p>}
+                  {analysis.summary && <p className="text-sm text-zinc-700 leading-relaxed mt-3 break-words">{analysis.summary}</p>}
                   <textarea
                     value={draft.feedback || ""}
                     onChange={(event) => setFeedback((items) => ({
@@ -231,22 +231,22 @@ export default function AITeachingPage() {
                     placeholder="If wrong, explain what actually happened and where the model missed it."
                     className="w-full mt-4 px-3 py-2 text-sm bg-white border border-zinc-200 rounded-md focus:outline-none focus:ring-2 focus:ring-zinc-900 resize-none"
                   />
-                  <div className="flex items-center justify-between gap-3 mt-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mt-3">
                     <div className="text-xs text-zinc-500">
                       {saved ? `Saved as ${saved.outcome}` : "No teaching feedback yet."}
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 min-w-0">
                       <button
                         onClick={() => saveFeedback(analysis, "correct")}
                         disabled={savingId === analysis.id}
-                        className="inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium border border-zinc-200 bg-white hover:bg-zinc-50 transition-colors disabled:opacity-60"
+                        className="min-w-0 inline-flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium border border-zinc-200 bg-white hover:bg-zinc-50 transition-colors disabled:opacity-60"
                       >
                         <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Correct
                       </button>
                       <button
                         onClick={() => saveFeedback(analysis, "wrong")}
                         disabled={savingId === analysis.id}
-                        className="inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium bg-zinc-950 text-white hover:bg-zinc-800 transition-colors disabled:opacity-60"
+                        className="min-w-0 inline-flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium bg-zinc-950 text-white hover:bg-zinc-800 transition-colors disabled:opacity-60"
                       >
                         {savingId === analysis.id ? <Save className="w-4 h-4" /> : <XCircle className="w-4 h-4" />} Wrong / Teach
                       </button>

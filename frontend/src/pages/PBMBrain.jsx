@@ -47,7 +47,7 @@ const downloadJson = (payload, filename) => {
 };
 
 export default function PBMBrainPage() {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const [question, setQuestion] = useState(defaultQuestion);
   const [journal, setJournal] = useState([]);
   const [analyses, setAnalyses] = useState([]);
@@ -115,14 +115,16 @@ export default function PBMBrainPage() {
             .order("created_at", { ascending: false })
             .limit(60)
         ),
-        tableRead(
-          supabase
-            .from("pbm_brain_exports")
-            .select("id,user_id,label,period_start,period_end,record_count,created_at")
-            .eq("user_id", user.id)
-            .order("created_at", { ascending: false })
-            .limit(20)
-        ),
+        isAdmin
+          ? tableRead(
+              supabase
+                .from("pbm_brain_exports")
+                .select("id,user_id,label,period_start,period_end,record_count,created_at")
+                .eq("user_id", user.id)
+                .order("created_at", { ascending: false })
+                .limit(20)
+            )
+          : Promise.resolve([]),
       ]);
 
       setJournal(journalRows);
@@ -136,7 +138,7 @@ export default function PBMBrainPage() {
       setError(err.message || "PBM Brain data could not be loaded.");
     }
     setLoading(false);
-  }, [result, user]);
+  }, [isAdmin, result, user]);
 
   useEffect(() => {
     loadWorkspaceData();
@@ -306,6 +308,7 @@ export default function PBMBrainPage() {
   };
 
   const exportBrainData = async () => {
+    if (!isAdmin) return;
     setError("");
     setExporting(true);
     try {
@@ -353,18 +356,20 @@ export default function PBMBrainPage() {
           <div className="text-[11px] tracking-[0.1em] uppercase font-semibold text-zinc-500">PBM Brain</div>
           <h1 className="text-4xl font-heading font-extrabold tracking-tight text-zinc-950 mt-1">PBM Brain</h1>
           <p className="text-sm text-zinc-500 mt-1.5">
-            Private expert-router memory for your journal, position posts, AI history, and weekend exports.
+            Private expert-router memory for your journal, position posts, and AI history.
           </p>
         </div>
-        <button
-          onClick={exportBrainData}
-          disabled={exporting || loading}
-          className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-zinc-200 rounded-md text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors disabled:opacity-60"
-          data-testid="pbm-brain-export"
-        >
-          <Download className="w-4 h-4" strokeWidth={1.75} />
-          {exporting ? "Exporting..." : "Export data"}
-        </button>
+        {isAdmin && (
+          <button
+            onClick={exportBrainData}
+            disabled={exporting || loading}
+            className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-zinc-200 rounded-md text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors disabled:opacity-60"
+            data-testid="pbm-brain-export"
+          >
+            <Download className="w-4 h-4" strokeWidth={1.75} />
+            {exporting ? "Exporting..." : "Export data"}
+          </button>
+        )}
       </div>
 
       <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4">
@@ -483,7 +488,7 @@ export default function PBMBrainPage() {
             )}
           </div>
 
-          <div className="grid lg:grid-cols-2 gap-5">
+          <div className={isAdmin ? "grid lg:grid-cols-2 gap-5" : ""}>
             <DataPanel title="Source data" icon={Database}>
               <div className="grid grid-cols-2 gap-3">
                 <MiniStat label="Journal" value={profile.journal_count} />
@@ -494,22 +499,24 @@ export default function PBMBrainPage() {
               </div>
             </DataPanel>
 
-            <DataPanel title="Weekend exports" icon={Download}>
-              {exports.length === 0 ? (
-                <div className="py-10 text-center text-sm text-zinc-400">No exports yet.</div>
-              ) : (
-                <div className="divide-y divide-zinc-100">
-                  {exports.slice(0, 4).map((item) => (
-                    <div key={item.id} className="py-3">
-                      <div className="text-sm font-semibold text-zinc-950 truncate">{item.label}</div>
-                      <div className="text-xs text-zinc-500 mt-0.5 tabular-nums">
-                        {item.record_count} records - {fmtDate(item.created_at)}
+            {isAdmin && (
+              <DataPanel title="Weekend exports" icon={Download}>
+                {exports.length === 0 ? (
+                  <div className="py-10 text-center text-sm text-zinc-400">No exports yet.</div>
+                ) : (
+                  <div className="divide-y divide-zinc-100">
+                    {exports.slice(0, 4).map((item) => (
+                      <div key={item.id} className="py-3">
+                        <div className="text-sm font-semibold text-zinc-950 truncate">{item.label}</div>
+                        <div className="text-xs text-zinc-500 mt-0.5 tabular-nums">
+                          {item.record_count} records - {fmtDate(item.created_at)}
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </DataPanel>
+                    ))}
+                  </div>
+                )}
+              </DataPanel>
+            )}
           </div>
         </div>
       </div>

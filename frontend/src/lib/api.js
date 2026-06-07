@@ -75,6 +75,21 @@ export async function registerPushToken(payload) {
   return data;
 }
 
+export async function getNotificationPreferences() {
+  const { data } = await apiClient.get("/notification-preferences");
+  return data;
+}
+
+export async function updateNotificationPreferences(payload) {
+  const { data } = await apiClient.put("/notification-preferences", payload);
+  return data;
+}
+
+export async function getSystemHealth() {
+  const { data } = await apiClient.get("/system/health");
+  return data;
+}
+
 export async function getAccountStatus() {
   const { data } = await apiClient.get("/me");
   return data;
@@ -92,5 +107,20 @@ export async function addEducationVideo(payload) {
 
 export async function deleteEducationVideo(id) {
   const { data } = await apiClient.delete(`/education/videos/${id}`);
+  return data;
+}
+
+export async function listTradingViewIndicators() {
+  const { data } = await apiClient.get("/indicators");
+  return data;
+}
+
+export async function addTradingViewIndicator(payload) {
+  const { data } = await apiClient.post("/indicators", payload);
+  return data;
+}
+
+export async function deleteTradingViewIndicator(id) {
+  const { data } = await apiClient.delete(`/indicators/${id}`);
   return data;
 }

@@ -332,9 +332,32 @@ const fetchNotificationRecipients = async (senderEmail) => {
     limit: "200",
   });
   const rows = await supabaseAdminJson(`beta_access?${params}`, { service: true });
-  return (Array.isArray(rows) ? rows : [])
+  const emails = (Array.isArray(rows) ? rows : [])
     .map((row) => String(row.email || "").trim().toLowerCase())
     .filter((email) => email && email !== senderEmail);
+  if (!emails.length) return [];
+
+  let preferences = [];
+  try {
+    preferences = await supabaseAdminJson(
+      "notification_preferences?select=recipient_email,email_enabled,web_push_enabled,native_push_enabled&limit=500",
+      { service: true },
+    );
+  } catch {
+    preferences = [];
+  }
+  const byEmail = new Map(
+    (Array.isArray(preferences) ? preferences : []).map((row) => [
+      String(row.recipient_email || "").trim().toLowerCase(),
+      row,
+    ]),
+  );
+  return emails.map((email) => ({
+    email,
+    email_enabled: byEmail.get(email)?.email_enabled !== false,
+    web_push_enabled: byEmail.get(email)?.web_push_enabled === true,
+    native_push_enabled: byEmail.get(email)?.native_push_enabled !== false,
+  }));
 };
 
 const sendSocialEmail = async (to, post, senderEmail) => {
@@ -393,8 +416,8 @@ const createWebNotifications = async (recipients, post, senderEmail) => {
   const timeframe = String(post.timeframe || "1h").trim();
   const bias = String(post.bias || "neutral").trim();
   const body = String(post.summary || `${timeframe} ${bias} market update`).trim().slice(0, 500);
-  const rows = recipients.map((recipientEmail) => ({
-    recipient_email: recipientEmail,
+  const rows = recipients.map((recipient) => ({
+    recipient_email: recipient.email,
     sender_email: senderEmail,
     type: "market_drop",
     title: `PBM Market Drop: ${symbol}`,
@@ -495,8 +518,13 @@ const fetchPushTokens = async (recipients) => {
   const rows = await supabaseAdminJson("push_tokens?select=id,token,recipient_email,platform&active=eq.true&limit=500", {
     service: true,
   });
-  const allowed = new Set(recipients);
-  return (Array.isArray(rows) ? rows : []).filter((row) => allowed.has(String(row.recipient_email || "").toLowerCase()));
+  const allowed = new Map(recipients.map((recipient) => [recipient.email, recipient]));
+  return (Array.isArray(rows) ? rows : []).filter((row) => {
+    const preference = allowed.get(String(row.recipient_email || "").toLowerCase());
+    if (!preference) return false;
+    if (row.platform === "web") return preference.web_push_enabled;
+    return preference.native_push_enabled;
+  });
 };
 
 const sendFirebasePush = async (device, post) => {
@@ -505,6 +533,7 @@ const sendFirebasePush = async (device, post) => {
   if (!projectId) throw httpError(500, "FIREBASE_PROJECT_ID is not configured");
   const token = await firebaseAccessToken();
   const symbol = String(post.symbol || "PBM").trim().toUpperCase();
+  const siteUrl = (getEnv("PBM_SITE_URL") || getEnv("URL") || "").replace(/\/+$/, "");
   const response = await fetch(`https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`, {
     method: "POST",
     headers: {
@@ -534,6 +563,13 @@ const sendFirebasePush = async (device, post) => {
             icon: "ic_stat_pbm",
             color: "#09090B",
           },
+        },
+        webpush: {
+          notification: {
+            icon: "/pbm-icon-192.png",
+            badge: "/pbm-icon-192.png",
+          },
+          ...(siteUrl ? { fcm_options: { link: `${siteUrl}/social` } } : {}),
         },
       },
     }),
@@ -593,8 +629,8 @@ const notifySocialPost = async (request) => {
   }
 
   const results = [];
-  for (const recipient of recipients) {
-    results.push(await sendSocialEmail(recipient, post, auth.user.email));
+  for (const recipient of recipients.filter((item) => item.email_enabled)) {
+    results.push(await sendSocialEmail(recipient.email, post, auth.user.email));
   }
   const sent = results.filter((item) => item.ok).length;
   const failed = results.filter((item) => item.ok === false).length;
@@ -615,8 +651,9 @@ const registerPushToken = async (request) => {
   const req = await requestJson(request);
   const token = String(req.token || "").trim();
   const platform = String(req.platform || "android").trim().toLowerCase();
+  const active = req.active !== false;
   if (!token) throw httpError(400, "Push token is required");
-  if (!["android", "ios"].includes(platform)) throw httpError(400, "Invalid push platform");
+  if (!["android", "ios", "web"].includes(platform)) throw httpError(400, "Invalid push platform");
   await supabaseAdminJson("push_tokens?on_conflict=token", {
     method: "POST",
     service: true,
@@ -626,11 +663,57 @@ const registerPushToken = async (request) => {
       recipient_email: auth.user.email,
       token,
       platform,
-      active: true,
+      active,
       updated_at: new Date().toISOString(),
     }),
   });
-  return { ok: true, platform };
+  return { ok: true, platform, active };
+};
+
+const notificationPreferences = async (request) => {
+  const auth = await requireBetaUser(request);
+  const defaults = {
+    email_enabled: true,
+    web_push_enabled: false,
+    native_push_enabled: true,
+  };
+  const params = new URLSearchParams({
+    select: "email_enabled,web_push_enabled,native_push_enabled",
+    user_id: `eq.${auth.user.id}`,
+    limit: "1",
+  });
+
+  if (request.method === "GET") {
+    const rows = await supabaseAdminJson(`notification_preferences?${params}`, {
+      service: true,
+      supabaseHints: auth.user.supabaseHints,
+    }).catch(() => []);
+    return { ...defaults, ...(Array.isArray(rows) ? rows[0] : null) };
+  }
+
+  if (request.method === "PUT") {
+    const req = await requestJson(request);
+    const values = {
+      email_enabled: req.email_enabled !== false,
+      web_push_enabled: req.web_push_enabled === true,
+      native_push_enabled: req.native_push_enabled !== false,
+    };
+    await supabaseAdminJson("notification_preferences?on_conflict=user_id", {
+      method: "POST",
+      service: true,
+      supabaseHints: auth.user.supabaseHints,
+      headers: { prefer: "resolution=merge-duplicates,return=minimal" },
+      body: JSON.stringify({
+        user_id: auth.user.id,
+        recipient_email: auth.user.email,
+        ...values,
+        updated_at: new Date().toISOString(),
+      }),
+    });
+    return values;
+  }
+
+  throw httpError(405, "Method not allowed");
 };
 
 const listNotifications = async (request) => {
@@ -738,6 +821,70 @@ const educationVideos = async (request, url, path) => {
       headers: { prefer: "return=minimal" },
       userToken: auth.user.token,
       supabaseHints: auth.user.supabaseHints,
+    });
+    return { ok: true };
+  }
+
+  throw httpError(405, "Method not allowed");
+};
+
+const cleanTradingViewUrl = (value) => {
+  const raw = String(value || "").trim();
+  try {
+    const parsed = new URL(raw);
+    const host = parsed.hostname.replace(/^www\./, "").toLowerCase();
+    return host === "tradingview.com" || host.endsWith(".tradingview.com") ? parsed.toString() : "";
+  } catch {
+    return "";
+  }
+};
+
+const indicatorLibrary = async (request, path) => {
+  if (request.method === "GET") {
+    const params = new URLSearchParams({
+      select: "*",
+      order: "created_at.desc",
+      limit: "100",
+    });
+    return supabaseAdminJson(`tradingview_indicators?${params}`, {
+      supabaseHints: supabaseHintsFromRequest(request),
+    });
+  }
+
+  if (request.method === "POST") {
+    const auth = await requireBetaUser(request);
+    if (!auth.isAdmin) throw httpError(403, "Only PBM admin can add indicators");
+    const req = await requestJson(request);
+    const title = String(req.title || "").trim().slice(0, 140);
+    const description = String(req.description || "").trim().slice(0, 1000);
+    const tradingviewUrl = cleanTradingViewUrl(req.tradingview_url);
+    const bannerUrl = String(req.banner_url || "").trim().slice(0, 2000);
+    if (!title || !tradingviewUrl) throw httpError(400, "Indicator name and a public TradingView link are required");
+    const rows = await supabaseAdminJson("tradingview_indicators", {
+      method: "POST",
+      service: true,
+      headers: { prefer: "return=representation" },
+      body: JSON.stringify({
+        user_id: auth.user.id,
+        author_email: auth.user.email,
+        title,
+        description,
+        tradingview_url: tradingviewUrl,
+        banner_url: bannerUrl,
+      }),
+    });
+    return Array.isArray(rows) ? rows[0] : rows;
+  }
+
+  if (request.method === "DELETE") {
+    const auth = await requireBetaUser(request);
+    if (!auth.isAdmin) throw httpError(403, "Only PBM admin can delete indicators");
+    const match = path.match(/^\/indicators\/([^/]+)$/);
+    if (!match || !/^[0-9a-f-]{36}$/i.test(match[1])) throw httpError(400, "Invalid indicator id");
+    await supabaseAdminJson(`tradingview_indicators?id=eq.${match[1]}`, {
+      method: "DELETE",
+      service: true,
+      headers: { prefer: "return=minimal" },
     });
     return { ok: true };
   }
@@ -2019,6 +2166,78 @@ const mlImport = async (request) => {
 
 const runtimeName = () => getEnv("PBM_RUNTIME") || "cloudflare-workers";
 
+const systemHealth = async (request) => {
+  const auth = await requireBetaUser(request);
+  if (!auth.isAdmin) throw httpError(403, "Only PBM admin can view system health");
+
+  const checkedAt = new Date().toISOString();
+  const services = {
+    worker: {
+      status: "operational",
+      detail: runtimeName(),
+    },
+    supabase: {
+      status: "checking",
+      detail: "Checking database connection",
+    },
+    market_data: {
+      status: "checking",
+      detail: "Checking live market source",
+    },
+    ai_engine: {
+      status: getEnv("ANTHROPIC_API_KEY") ? "configured" : "missing",
+      detail: getEnv("ANTHROPIC_API_KEY") ? DEFAULT_CLAUDE_MODEL : "ANTHROPIC_API_KEY is missing",
+    },
+    email: {
+      status: getEnv("RESEND_API_KEY") ? "configured" : "missing",
+      detail: getEnv("RESEND_API_KEY") ? (getEnv("PBM_EMAIL_FROM") || "Default Resend sender") : "RESEND_API_KEY is missing",
+    },
+    mobile_push: {
+      status: getEnv("FIREBASE_SERVICE_ACCOUNT_JSON") ? "configured" : "missing",
+      detail: getEnv("FIREBASE_SERVICE_ACCOUNT_JSON") ? "Firebase service account connected" : "Firebase service account is missing",
+    },
+    web_push: {
+      status:
+        getEnv("FIREBASE_SERVICE_ACCOUNT_JSON") &&
+        getEnv("REACT_APP_FIREBASE_PROJECT_ID") &&
+        getEnv("REACT_APP_FIREBASE_VAPID_KEY")
+          ? "configured"
+          : "missing",
+      detail:
+        getEnv("REACT_APP_FIREBASE_PROJECT_ID") && getEnv("REACT_APP_FIREBASE_VAPID_KEY")
+          ? "Firebase Web Push connected"
+          : "Firebase web config or VAPID key is missing",
+    },
+  };
+
+  try {
+    await supabaseAdminJson("beta_access?select=email&limit=1", {
+      service: true,
+      supabaseHints: auth.user.supabaseHints,
+    });
+    services.supabase = { status: "operational", detail: "Database connection healthy" };
+  } catch (error) {
+    services.supabase = { status: "error", detail: String(error?.message || "Database check failed").slice(0, 180) };
+  }
+
+  try {
+    const response = await fetch(`${OKX}/api/v5/market/ticker?instId=BTC-USDT`, {
+      headers: { "user-agent": "PBM/1.0" },
+    });
+    if (!response.ok) throw new Error(`Market source returned ${response.status}`);
+    services.market_data = { status: "operational", detail: "Live crypto market source healthy" };
+  } catch (error) {
+    services.market_data = { status: "error", detail: String(error?.message || "Market data check failed").slice(0, 180) };
+  }
+
+  const degraded = Object.values(services).some((service) => ["missing", "error"].includes(service.status));
+  return {
+    status: degraded ? "degraded" : "operational",
+    checked_at: checkedAt,
+    services,
+  };
+};
+
 const handle = async (request) => {
   const url = new URL(request.url);
   const path = routePath(request);
@@ -2035,7 +2254,9 @@ const handle = async (request) => {
   if (request.method === "GET" && path === "/market/global") return json(await marketGlobal(), 200, request);
   if (request.method === "GET" && path === "/market/search") return json(await marketSearch(url), 200, request);
   if (request.method === "GET" && path === "/me") return json(await accountStatus(request), 200, request);
+  if (request.method === "GET" && path === "/system/health") return json(await systemHealth(request), 200, request);
   if (path === "/education/videos" || path.startsWith("/education/videos/")) return json(await educationVideos(request, url, path), 200, request);
+  if (path === "/indicators" || path.startsWith("/indicators/")) return json(await indicatorLibrary(request, path), 200, request);
   if (request.method === "POST" && path === "/analyze") return json(await analyze(request), 200, request);
   if (request.method === "POST" && path === "/chat") return json(await chat(request), 200, request);
   if (request.method === "POST" && path === "/brain/analyze") return json(await brainAnalyze(request), 200, request);
@@ -2043,6 +2264,9 @@ const handle = async (request) => {
   if (request.method === "POST" && path === "/ml/import") return json(await mlImport(request), 200, request);
   if (request.method === "POST" && path === "/social/notify") return json(await notifySocialPost(request), 200, request);
   if (request.method === "POST" && path === "/push/register") return json(await registerPushToken(request), 200, request);
+  if (path === "/notification-preferences" && ["GET", "PUT"].includes(request.method)) {
+    return json(await notificationPreferences(request), 200, request);
+  }
   if (request.method === "GET" && path === "/notifications") return json(await listNotifications(request), 200, request);
   if (request.method === "POST" && path === "/notifications/read-all") return json(await markAllNotificationsRead(request), 200, request);
   const notificationReadMatch = path.match(/^\/notifications\/([^/]+)\/read$/);

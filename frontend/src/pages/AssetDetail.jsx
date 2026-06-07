@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowUpRight, ArrowDownRight, BookmarkPlus, BookmarkCheck, BarChart3, CandlestickChart } from "lucide-react";
+import { ArrowUpRight, ArrowDownRight, BookmarkPlus, BookmarkCheck, BarChart3, CandlestickChart, Maximize2, Minimize2 } from "lucide-react";
 import PriceChart from "@/components/PriceChart";
 import TradingViewChart from "@/components/TradingViewChart";
 import TechnicalPanel from "@/components/TechnicalPanel";
@@ -29,6 +29,33 @@ export default function AssetDetail() {
   const [watchlists, setWatchlists] = useState([]);
   const [inWatchlist, setInWatchlist] = useState(false);
   const [previousAnalysis, setPreviousAnalysis] = useState(null);
+  const [chartFullscreen, setChartFullscreen] = useState(false);
+  const [chartHeight, setChartHeight] = useState(540);
+  const chartBodyRef = useRef(null);
+
+  useEffect(() => {
+    if (!chartFullscreen) return undefined;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [chartFullscreen]);
+
+  useEffect(() => {
+    if (!chartBodyRef.current) return undefined;
+    const updateHeight = () => {
+      const next = Math.max(320, chartBodyRef.current.clientHeight - 16);
+      setChartHeight(next);
+    };
+    updateHeight();
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(chartBodyRef.current);
+    window.addEventListener("resize", updateHeight);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", updateHeight);
+    };
+  }, [chartFullscreen]);
 
   // Load OHLC + ticker
   useEffect(() => {
@@ -218,7 +245,9 @@ export default function AssetDetail() {
       </div>
 
       {/* Chart controls */}
-      <div className="bg-white border border-zinc-200 rounded-lg overflow-hidden">
+      <div className={`bg-white border border-zinc-200 overflow-hidden ${
+        chartFullscreen ? "fixed inset-0 z-[80] rounded-none flex flex-col" : "rounded-lg"
+      }`}>
         <div className="px-4 py-3 border-b border-zinc-100 flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-1 bg-zinc-50 rounded-md p-0.5">
             {TIMEFRAMES.map((t) => (
@@ -268,13 +297,26 @@ export default function AssetDetail() {
                 </button>
               </div>
             )}
+            <button
+              type="button"
+              onClick={() => setChartFullscreen((current) => !current)}
+              className="w-8 h-8 inline-flex items-center justify-center rounded-md border border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50 hover:text-zinc-950 transition-colors"
+              aria-label={chartFullscreen ? "Exit full screen chart" : "Open full screen chart"}
+              title={chartFullscreen ? "Exit full screen" : "Full screen"}
+              data-testid="chart-fullscreen"
+            >
+              {chartFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+            </button>
           </div>
         </div>
-        <div className="p-2">
+        <div
+          ref={chartBodyRef}
+          className={`p-2 ${chartFullscreen ? "flex-1 min-h-0" : "h-[500px] md:h-[560px]"}`}
+        >
           {chartSource === "tradingview" ? (
-            <TradingViewChart symbol={symbol} timeframe={timeframe} height={380} />
+            <TradingViewChart symbol={symbol} timeframe={timeframe} height={chartHeight} />
           ) : (
-            <PriceChart candles={candles} mode={chartMode} height={380} />
+            <PriceChart candles={candles} mode={chartMode} height={chartHeight} />
           )}
         </div>
       </div>

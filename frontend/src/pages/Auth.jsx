@@ -7,18 +7,32 @@ import { SUPABASE_CONFIGURED } from "@/lib/supabase";
 export default function AuthPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [mode, setMode] = useState("signin");
   const [error, setError] = useState(null);
+  const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(false);
-  const { signIn } = useAuth();
+  const { signIn, signUp } = useAuth();
   const navigate = useNavigate();
 
   const onSubmit = async (e) => {
     e.preventDefault();
     setError(null);
+    setNotice("");
+    if (mode === "signup" && password !== confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
     setLoading(true);
     try {
-      await signIn(email, password);
-      navigate("/");
+      if (mode === "signup") {
+        const data = await signUp(email, password);
+        if (data?.session) navigate("/");
+        else setNotice("Account created. Check your email to confirm your account, then sign in.");
+      } else {
+        await signIn(email, password);
+        navigate("/");
+      }
     } catch (err) {
       setError(err.message || "Authentication failed");
     } finally {
@@ -86,9 +100,11 @@ export default function AuthPage() {
           </div>
           <div className="mb-8">
             <h1 className="text-3xl font-heading font-extrabold tracking-tight text-zinc-950">
-              Welcome back
+              {mode === "signup" ? "Create your PBM account" : "Welcome back"}
             </h1>
-            <p className="text-sm text-zinc-500 mt-2">Sign in to continue your analysis.</p>
+            <p className="text-sm text-zinc-500 mt-2">
+              {mode === "signup" ? "Register directly with PBM to start your workspace." : "Sign in to continue your analysis."}
+            </p>
           </div>
 
           {!SUPABASE_CONFIGURED && (
@@ -128,10 +144,32 @@ export default function AuthPage() {
                 placeholder="********"
               />
             </div>
+            {mode === "signup" && (
+              <div>
+                <label className="text-[11px] tracking-[0.08em] uppercase font-semibold text-zinc-500 block mb-1.5">
+                  Confirm password
+                </label>
+                <input
+                  type="password"
+                  required
+                  minLength={6}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  data-testid="auth-confirm-password-input"
+                  className="w-full px-3.5 py-2.5 bg-white border border-zinc-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:border-transparent transition-all"
+                  placeholder="********"
+                />
+              </div>
+            )}
 
             {error && (
               <div className="text-xs text-rose-600 bg-rose-50 border border-rose-200 rounded-md px-3 py-2" data-testid="auth-error">
                 {error}
+              </div>
+            )}
+            {notice && (
+              <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md px-3 py-2">
+                {notice}
               </div>
             )}
 
@@ -141,13 +179,25 @@ export default function AuthPage() {
               data-testid="auth-submit-btn"
               className="w-full flex items-center justify-center gap-2 bg-zinc-950 text-white py-2.5 rounded-md font-medium hover:bg-zinc-800 transition-colors disabled:opacity-60"
             >
-              {loading ? "Working..." : "Sign in"}
+              {loading ? "Working..." : mode === "signup" ? "Create account" : "Sign in"}
               <ArrowRight className="w-4 h-4" />
             </button>
           </form>
 
           <div className="mt-6 text-center text-sm text-zinc-500">
-            Closed beta access only.
+            {mode === "signup" ? "Already have an account?" : "New to PBM?"}{" "}
+            <button
+              type="button"
+              onClick={() => {
+                setMode(mode === "signup" ? "signin" : "signup");
+                setError(null);
+                setNotice("");
+                setConfirmPassword("");
+              }}
+              className="font-medium text-zinc-950 hover:underline"
+            >
+              {mode === "signup" ? "Sign in" : "Create one"}
+            </button>
             <div className="mt-2 text-xs">
               <a href="/privacy.html" className="font-medium text-zinc-950 hover:underline">Privacy</a>
               <span className="mx-2 text-zinc-300">/</span>

@@ -13,6 +13,7 @@ import SocialPage from "@/pages/Social";
 import JournalPage from "@/pages/Journal";
 import PayoutTrackerPage from "@/pages/PayoutTracker";
 import EducationPage from "@/pages/Education";
+import IndicatorsPage from "@/pages/Indicators";
 import PBMBrainPage from "@/pages/PBMBrain";
 import AITeachingPage from "@/pages/AITeaching";
 import HistoryPage from "@/pages/History";
@@ -41,6 +42,7 @@ function App() {
           <Route path="/journal" element={withLayout(<JournalPage />)} />
           <Route path="/payout-tracker" element={withLayout(<PayoutTrackerPage />)} />
           <Route path="/education" element={withLayout(<EducationPage />)} />
+          <Route path="/indicators" element={withLayout(<IndicatorsPage />)} />
           <Route path="/pbm-brain" element={withLayout(<PBMBrainPage />)} />
           <Route path="/ai-teaching" element={withLayout(<AITeachingPage />)} />
           <Route path="/history" element={withLayout(<HistoryPage />)} />

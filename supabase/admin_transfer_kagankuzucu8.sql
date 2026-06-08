@@ -10,6 +10,8 @@ insert into public.beta_access (
   daily_ai_limit,
   can_post_social,
   can_add_education,
+  can_use_ai_analysis,
+  can_use_pbm_brain,
   notes
 )
 values (
@@ -18,6 +20,8 @@ values (
   'active',
   9999,
   9999,
+  true,
+  true,
   true,
   true,
   'PBM admin'
@@ -29,6 +33,8 @@ set role = 'admin',
     daily_ai_limit = 9999,
     can_post_social = true,
     can_add_education = true,
+    can_use_ai_analysis = true,
+    can_use_pbm_brain = true,
     notes = 'PBM admin',
     updated_at = now();
 
@@ -40,6 +46,8 @@ insert into public.beta_access (
   daily_ai_limit,
   can_post_social,
   can_add_education,
+  can_use_ai_analysis,
+  can_use_pbm_brain,
   notes
 )
 values (
@@ -50,6 +58,8 @@ values (
   0,
   false,
   false,
+  true,
+  false,
   'Old admin access revoked'
 )
 on conflict (email) do update
@@ -59,6 +69,8 @@ set role = 'user',
     daily_ai_limit = 0,
     can_post_social = false,
     can_add_education = false,
+    can_use_ai_analysis = true,
+    can_use_pbm_brain = false,
     notes = 'Old admin access revoked',
     updated_at = now();
 

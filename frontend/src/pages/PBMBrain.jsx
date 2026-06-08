@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { BrainCircuit, Database, Download, Plus, Sparkles } from "lucide-react";
+import { BrainCircuit, Database, Download, LockKeyhole, Plus, Sparkles } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { runPBMBrain } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
@@ -47,7 +47,8 @@ const downloadJson = (payload, filename) => {
 };
 
 export default function PBMBrainPage() {
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, access, refreshAccount } = useAuth();
+  const brainEnabled = isAdmin || access?.can_use_pbm_brain === true;
   const [question, setQuestion] = useState(defaultQuestion);
   const [journal, setJournal] = useState([]);
   const [analyses, setAnalyses] = useState([]);
@@ -64,7 +65,10 @@ export default function PBMBrainPage() {
   const [error, setError] = useState("");
 
   const loadWorkspaceData = useCallback(async () => {
-    if (!user) return;
+    if (!user || !brainEnabled) {
+      setLoading(false);
+      return;
+    }
     setError("");
     try {
       const [
@@ -138,7 +142,11 @@ export default function PBMBrainPage() {
       setError(err.message || "PBM Brain data could not be loaded.");
     }
     setLoading(false);
-  }, [isAdmin, result, user]);
+  }, [brainEnabled, isAdmin, result, user]);
+
+  useEffect(() => {
+    refreshAccount().catch(() => {});
+  }, [refreshAccount]);
 
   useEffect(() => {
     loadWorkspaceData();
@@ -170,6 +178,7 @@ export default function PBMBrainPage() {
   );
 
   const handleRunBrain = async () => {
+    if (!brainEnabled) return;
     setError("");
     setRunning(true);
     try {
@@ -210,6 +219,7 @@ export default function PBMBrainPage() {
 
   const addMemory = async (event) => {
     event.preventDefault();
+    if (!brainEnabled) return;
     setError("");
     if (!memoryForm.title.trim()) {
       setError("Memory title is required.");
@@ -350,7 +360,10 @@ export default function PBMBrainPage() {
   const risks = toArray(activeRun?.risks);
 
   return (
-    <div className="space-y-6">
+    <div className="relative min-h-[70vh]">
+      <div className={`space-y-6 transition-[filter,opacity] ${
+        brainEnabled ? "" : "pointer-events-none select-none blur-[6px] opacity-55"
+      }`} aria-hidden={!brainEnabled}>
       <div className="flex items-end justify-between gap-6 flex-wrap">
         <div>
           <div className="text-[11px] tracking-[0.1em] uppercase font-semibold text-zinc-500">PBM Brain</div>
@@ -577,6 +590,20 @@ export default function PBMBrainPage() {
           )}
         </div>
       </div>
+      </div>
+      {!brainEnabled && (
+        <div className="absolute inset-0 z-10 flex items-start justify-center pt-28 px-4">
+          <div className="w-full max-w-md bg-white border border-zinc-200 rounded-lg p-6 text-center shadow-sm">
+            <div className="w-10 h-10 mx-auto rounded-md bg-zinc-950 text-white flex items-center justify-center">
+              <LockKeyhole className="w-5 h-5" strokeWidth={1.75} />
+            </div>
+            <div className="text-lg font-heading font-bold text-zinc-950 mt-4">PBM Brain is locked</div>
+            <p className="text-sm text-zinc-500 leading-6 mt-2">
+              PBM Brain access is not enabled for this account.
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -97,7 +97,7 @@ function persistDirectSession(session) {
   }
 }
 
-async function directPasswordSignIn(email, password) {
+async function directPasswordSignIn(email, password, captchaToken = "") {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
     throw new Error("Supabase env vars are missing");
   }
@@ -107,7 +107,11 @@ async function directPasswordSignIn(email, password) {
       apikey: SUPABASE_ANON_KEY,
       "content-type": "application/json",
     },
-    { email, password },
+    {
+      email,
+      password,
+      ...(captchaToken ? { gotrue_meta_security: { captcha_token: captchaToken } } : {}),
+    },
   );
   if (!ok) {
     throw new Error(body?.error_description || body?.msg || body?.message || "Authentication failed");
@@ -120,7 +124,7 @@ async function directPasswordSignIn(email, password) {
   return { data: { session: directSession, user: directSession.user }, error: null };
 }
 
-async function directSignUp(email, password) {
+async function directSignUp(email, password, captchaToken = "") {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
     throw new Error("Supabase env vars are missing");
   }
@@ -130,13 +134,17 @@ async function directSignUp(email, password) {
       apikey: SUPABASE_ANON_KEY,
       "content-type": "application/json",
     },
-    { email, password },
+    {
+      email,
+      password,
+      ...(captchaToken ? { gotrue_meta_security: { captcha_token: captchaToken } } : {}),
+    },
   );
   if (!ok) {
     const detail = body?.error_description || body?.msg || body?.message || "Sign up failed";
     if (/email rate limit exceeded|rate limit.*email|over_email_send_rate_limit/i.test(detail)) {
       try {
-        return await directPasswordSignIn(email, password);
+        return await directPasswordSignIn(email, password, captchaToken);
       } catch {
         throw new Error("Registration email limit reached. Please try again later or contact the PBM admin.");
       }
@@ -210,9 +218,9 @@ export function AuthProvider({ children }) {
     };
   }, [refreshAccount]);
 
-  const signIn = async (email, password) => {
+  const signIn = async (email, password, captchaToken = "") => {
     const cleanEmail = email.trim().toLowerCase();
-    const result = await directPasswordSignIn(cleanEmail, password);
+    const result = await directPasswordSignIn(cleanEmail, password, captchaToken);
     const { data, error } = result;
     if (error) throw error;
     if (data.session) setSession(data.session);
@@ -220,8 +228,8 @@ export function AuthProvider({ children }) {
     if (data.user) ensureUserBootstrap(data.user).catch(() => {});
     refreshAccount().catch(() => {});
   };
-  const signUp = async (email, password) => {
-    const { data, error } = await directSignUp(email.trim().toLowerCase(), password);
+  const signUp = async (email, password, captchaToken = "") => {
+    const { data, error } = await directSignUp(email.trim().toLowerCase(), password, captchaToken);
     if (error) throw error;
     if (data.session) setSession(data.session);
     if (data.user) setUser(data.user);

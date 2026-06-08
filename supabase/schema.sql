@@ -23,6 +23,8 @@ create table if not exists public.beta_access (
   daily_ai_limit integer not null default 10,
   can_post_social boolean not null default false,
   can_add_education boolean not null default false,
+  can_use_ai_analysis boolean not null default true,
+  can_use_pbm_brain boolean not null default false,
   notes text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -266,6 +268,8 @@ create table if not exists public.ai_teaching_feedback (
 -- Existing beta databases may already have older versions of these tables.
 -- Keep these additive changes idempotent so re-running the schema repairs missing fields.
 alter table public.beta_access add column if not exists daily_ai_limit integer not null default 10;
+alter table public.beta_access add column if not exists can_use_ai_analysis boolean not null default true;
+alter table public.beta_access add column if not exists can_use_pbm_brain boolean not null default false;
 alter table public.social_posts add column if not exists author_email text;
 alter table public.social_posts add column if not exists author_nickname text;
 alter table public.social_posts add column if not exists market text not null default 'crypto';
@@ -292,6 +296,8 @@ alter table public.analysis_cache add column if not exists updated_at timestampt
 alter table public.beta_access alter column can_post_social set default false;
 alter table public.beta_access alter column daily_ai_limit set default 10;
 alter table public.beta_access alter column can_add_education set default false;
+alter table public.beta_access alter column can_use_ai_analysis set default true;
+alter table public.beta_access alter column can_use_pbm_brain set default false;
 
 create index if not exists analysis_history_user_created_idx
   on public.analysis_history (user_id, created_at desc);
@@ -564,14 +570,42 @@ create policy "admin delete tradingview_indicators"
 create policy "own pbm_brain_runs"
   on public.pbm_brain_runs for all
   to authenticated
-  using ((select auth.uid()) = user_id)
-  with check ((select auth.uid()) = user_id);
+  using (
+    (select auth.uid()) = user_id
+    and exists (
+      select 1 from public.beta_access access
+      where lower(access.email) = lower(coalesce((select auth.jwt() ->> 'email'), ''))
+        and (access.can_use_pbm_brain is true or access.role = 'admin')
+    )
+  )
+  with check (
+    (select auth.uid()) = user_id
+    and exists (
+      select 1 from public.beta_access access
+      where lower(access.email) = lower(coalesce((select auth.jwt() ->> 'email'), ''))
+        and (access.can_use_pbm_brain is true or access.role = 'admin')
+    )
+  );
 
 create policy "own pbm_brain_memories"
   on public.pbm_brain_memories for all
   to authenticated
-  using ((select auth.uid()) = user_id)
-  with check ((select auth.uid()) = user_id);
+  using (
+    (select auth.uid()) = user_id
+    and exists (
+      select 1 from public.beta_access access
+      where lower(access.email) = lower(coalesce((select auth.jwt() ->> 'email'), ''))
+        and (access.can_use_pbm_brain is true or access.role = 'admin')
+    )
+  )
+  with check (
+    (select auth.uid()) = user_id
+    and exists (
+      select 1 from public.beta_access access
+      where lower(access.email) = lower(coalesce((select auth.jwt() ->> 'email'), ''))
+        and (access.can_use_pbm_brain is true or access.role = 'admin')
+    )
+  );
 
 create policy "own pbm_brain_exports"
   on public.pbm_brain_exports for all
@@ -683,12 +717,12 @@ create policy "own delete social images"
   to authenticated
   using (bucket_id = 'social-images' and (select auth.uid())::text = (storage.foldername(name))[1]);
 
--- =========== Closed beta defaults ===========
+-- =========== PBM account defaults ===========
 
-insert into public.beta_access (email, role, status, weekly_ai_limit, daily_ai_limit, can_post_social, can_add_education, notes)
+insert into public.beta_access (email, role, status, weekly_ai_limit, daily_ai_limit, can_post_social, can_add_education, can_use_ai_analysis, can_use_pbm_brain, notes)
 values
-  ('kagankuzucu8@gmail.com', 'admin', 'active', 9999, 9999, true, true, 'PBM admin'),
-  ('trader@marketdesk.test', 'user', 'active', 10, 10, false, false, 'Local test account')
+  ('kagankuzucu8@gmail.com', 'admin', 'active', 9999, 9999, true, true, true, true, 'PBM admin'),
+  ('trader@marketdesk.test', 'user', 'active', 10, 10, false, false, true, false, 'Local test account')
 on conflict (email) do update
 set role = excluded.role,
     status = excluded.status,
@@ -696,6 +730,8 @@ set role = excluded.role,
     daily_ai_limit = excluded.daily_ai_limit,
     can_post_social = excluded.can_post_social,
     can_add_education = excluded.can_add_education,
+    can_use_ai_analysis = excluded.can_use_ai_analysis,
+    can_use_pbm_brain = excluded.can_use_pbm_brain,
     notes = excluded.notes,
     updated_at = now();
 
@@ -705,17 +741,18 @@ set role = 'user',
     daily_ai_limit = least(coalesce(daily_ai_limit, 10), 10),
     can_post_social = false,
     can_add_education = false,
+    can_use_pbm_brain = false,
     updated_at = now()
 where lower(email) <> 'kagankuzucu8@gmail.com'
-  and (role = 'admin' or can_post_social is true or can_add_education is true);
+  and (role = 'admin' or can_post_social is true or can_add_education is true or can_use_pbm_brain is true);
 
 -- =========== Bootstrap helper for new users ===========
 
 create or replace function public.handle_new_user()
 returns trigger language plpgsql security definer set search_path = public as $$
 begin
-  insert into public.beta_access (email, role, status, weekly_ai_limit, daily_ai_limit, can_post_social, can_add_education, notes)
-    values (lower(coalesce(new.email, '')), 'user', 'active', 10, 10, false, false, 'Self-registered PBM account')
+  insert into public.beta_access (email, role, status, weekly_ai_limit, daily_ai_limit, can_post_social, can_add_education, can_use_ai_analysis, can_use_pbm_brain, notes)
+    values (lower(coalesce(new.email, '')), 'user', 'active', 10, 10, false, false, true, false, 'PBM account')
     on conflict (email) do nothing;
   insert into public.user_settings (user_id) values (new.id)
     on conflict do nothing;

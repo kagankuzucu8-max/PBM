@@ -18,6 +18,7 @@ import PBMBrainPage from "@/pages/PBMBrain";
 import AITeachingPage from "@/pages/AITeaching";
 import HistoryPage from "@/pages/History";
 import SettingsPage from "@/pages/Settings";
+import AdminUsersPage from "@/pages/AdminUsers";
 import MobileNativeBridge from "@/components/MobileNativeBridge";
 
 const withLayout = (node) => (
@@ -44,6 +45,7 @@ function App() {
           <Route path="/education" element={withLayout(<EducationPage />)} />
           <Route path="/indicators" element={withLayout(<IndicatorsPage />)} />
           <Route path="/pbm-brain" element={withLayout(<PBMBrainPage />)} />
+          <Route path="/admin/users" element={withLayout(<AdminUsersPage />)} />
           <Route path="/ai-teaching" element={withLayout(<AITeachingPage />)} />
           <Route path="/history" element={withLayout(<HistoryPage />)} />
           <Route path="/settings" element={withLayout(<SettingsPage />)} />

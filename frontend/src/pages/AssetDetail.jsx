@@ -16,7 +16,8 @@ import { buildAnalysisChange } from "@/lib/analysisChange";
 export default function AssetDetail() {
   const { symbol } = useParams();
   const navigate = useNavigate();
-  const { user, aiUsage, isAdmin, refreshAccount } = useAuth();
+  const { user, aiUsage, isAdmin, access, refreshAccount } = useAuth();
+  const aiAnalysisEnabled = isAdmin || access?.can_use_ai_analysis !== false;
   const [timeframe, setTimeframe] = useState(localStorage.getItem("md.tf") || "1h");
   const [candles, setCandles] = useState([]);
   const [ticker, setTicker] = useState(null);
@@ -32,6 +33,10 @@ export default function AssetDetail() {
   const [chartFullscreen, setChartFullscreen] = useState(false);
   const [chartHeight, setChartHeight] = useState(540);
   const chartBodyRef = useRef(null);
+
+  useEffect(() => {
+    refreshAccount().catch(() => {});
+  }, [refreshAccount]);
 
   useEffect(() => {
     if (!chartFullscreen) return undefined;
@@ -127,7 +132,7 @@ export default function AssetDetail() {
   );
 
   const runAnalysis = useCallback(async () => {
-    if (!ticker || !indicators) return;
+    if (!aiAnalysisEnabled || !ticker || !indicators) return;
     setAiLoading(true);
     setAiError(null);
     try {
@@ -174,7 +179,7 @@ export default function AssetDetail() {
     } finally {
       setAiLoading(false);
     }
-  }, [symbol, timeframe, ticker, indicators, candles, analysis, previousAnalysis, user, marketType, refreshAccount]);
+  }, [aiAnalysisEnabled, symbol, timeframe, ticker, indicators, candles, analysis, previousAnalysis, user, marketType, refreshAccount]);
 
   const toggleWatchlist = async () => {
     if (!user || watchlists.length === 0) {
@@ -340,6 +345,7 @@ export default function AssetDetail() {
             lastUpdated={lastUpdated}
             usage={analysis?.usage || aiUsage}
             isAdmin={isAdmin}
+            enabled={aiAnalysisEnabled}
           />
         </div>
       </div>

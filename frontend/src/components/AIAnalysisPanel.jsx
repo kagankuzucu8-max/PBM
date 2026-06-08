@@ -23,7 +23,7 @@ function VerdictBadge({ verdict, confidence }) {
   );
 }
 
-export default function AIAnalysisPanel({ analysis, loading, onRun, lastUpdated, error, usage, isAdmin }) {
+export default function AIAnalysisPanel({ analysis, loading, onRun, lastUpdated, error, usage, isAdmin, enabled = true }) {
   const showUsage = !isAdmin && usage?.limit != null;
   return (
     <div className="bg-slate-50 border border-slate-200 rounded-lg overflow-hidden">
@@ -44,12 +44,12 @@ export default function AIAnalysisPanel({ analysis, loading, onRun, lastUpdated,
         )}
         <button
           onClick={onRun}
-          disabled={loading || (showUsage && usage.remaining <= 0)}
+          disabled={!enabled || loading || (showUsage && usage.remaining <= 0)}
           data-testid="run-ai-analysis-btn"
           className="inline-flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-slate-800 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
         >
           {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-          {loading ? "Analyzing…" : analysis ? "Re-analyze" : "Run AI Analysis"}
+          {!enabled ? "Access disabled" : loading ? "Analyzing…" : analysis ? "Re-analyze" : "Run AI Analysis"}
         </button>
       </div>
 
@@ -59,7 +59,16 @@ export default function AIAnalysisPanel({ analysis, loading, onRun, lastUpdated,
         </div>
       )}
 
-      {!analysis && !loading && (
+      {!enabled && (
+        <div className="p-10 text-center">
+          <Sparkles className="w-10 h-10 mx-auto text-slate-300 mb-3" strokeWidth={1.25} />
+          <div className="text-sm text-slate-600 max-w-md mx-auto">
+            AI Analysis is not enabled for this account.
+          </div>
+        </div>
+      )}
+
+      {enabled && !analysis && !loading && (
         <div className="p-10 text-center">
           <Sparkles className="w-10 h-10 mx-auto text-slate-300 mb-3" strokeWidth={1.25} />
           <div className="text-sm text-slate-600 max-w-md mx-auto">
@@ -68,7 +77,7 @@ export default function AIAnalysisPanel({ analysis, loading, onRun, lastUpdated,
         </div>
       )}
 
-      {loading && !analysis && (
+      {enabled && loading && !analysis && (
         <div className="p-10 space-y-3">
           <div className="h-4 bg-slate-200 rounded animate-pulse w-2/3" />
           <div className="h-4 bg-slate-200 rounded animate-pulse w-full" />
@@ -77,7 +86,7 @@ export default function AIAnalysisPanel({ analysis, loading, onRun, lastUpdated,
         </div>
       )}
 
-      {analysis && (
+      {enabled && analysis && (
         <div className="p-6 space-y-6">
           <div className="flex items-center justify-between flex-wrap gap-3">
             <VerdictBadge verdict={analysis.verdict} confidence={analysis.confidence} />

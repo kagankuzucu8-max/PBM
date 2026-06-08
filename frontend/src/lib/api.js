@@ -95,6 +95,16 @@ export async function getAccountStatus() {
   return data;
 }
 
+export async function listAdminUsers() {
+  const { data } = await apiClient.get("/admin/users");
+  return data;
+}
+
+export async function updateAdminUserAccess(payload) {
+  const { data } = await apiClient.patch("/admin/users", payload);
+  return data;
+}
+
 export async function listEducationVideos() {
   const { data } = await apiClient.get("/education/videos");
   return data;

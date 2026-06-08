@@ -213,6 +213,18 @@ const fetchBetaAccess = async (email, userToken, supabaseHints) => {
   }
 };
 
+const defaultUserAccess = (email) => ({
+  email,
+  role: "user",
+  status: "active",
+  weekly_ai_limit: 10,
+  daily_ai_limit: 10,
+  can_post_social: false,
+  can_add_education: false,
+  can_use_ai_analysis: true,
+  can_use_pbm_brain: false,
+});
+
 const requireBetaUser = async (request) => {
   const user = await authenticatedUser(request);
   let access = await fetchBetaAccess(user.email, user.token, user.supabaseHints);
@@ -225,12 +237,39 @@ const requireBetaUser = async (request) => {
       daily_ai_limit: 9999,
       can_post_social: true,
       can_add_education: true,
+      can_use_ai_analysis: true,
+      can_use_pbm_brain: true,
     };
   }
-  if (!access || access.status !== "active") {
-    throw httpError(403, "This email is not enabled for the PBM closed beta");
+  if (!access) {
+    access = defaultUserAccess(user.email);
+    if (hasSupabaseServiceKey()) {
+      try {
+        const rows = await supabaseAdminJson("beta_access?on_conflict=email", {
+          method: "POST",
+          service: true,
+          supabaseHints: user.supabaseHints,
+          headers: { prefer: "resolution=merge-duplicates,return=representation" },
+          body: JSON.stringify(access),
+        });
+        if (Array.isArray(rows) && rows[0]) access = rows[0];
+      } catch {
+        // Existing accounts must remain usable even if access bootstrap is temporarily unavailable.
+      }
+    }
   }
   return { user, access, isAdmin: access.role === "admin" && ADMIN_EMAILS.has(user.email) };
+};
+
+const featureEnabled = (auth, feature) => {
+  if (auth.isAdmin) return true;
+  if (feature === "ai_analysis") return auth.access.can_use_ai_analysis !== false;
+  if (feature === "pbm_brain") return auth.access.can_use_pbm_brain === true;
+  return false;
+};
+
+const requireFeature = (auth, feature, detail) => {
+  if (!featureEnabled(auth, feature)) throw httpError(403, detail);
 };
 
 const dayStartDate = () => {
@@ -308,12 +347,107 @@ const accountStatus = async (request) => {
       daily_ai_limit: Number(auth.access.daily_ai_limit ?? auth.access.weekly_ai_limit ?? 10),
       can_post_social: Boolean(auth.access.can_post_social),
       can_add_education: Boolean(auth.access.can_add_education),
+      can_use_ai_analysis: featureEnabled(auth, "ai_analysis"),
+      can_use_pbm_brain: featureEnabled(auth, "pbm_brain"),
     },
     is_admin: auth.isAdmin,
     usage: {
       ai_analysis: await usageState(auth, "ai_analysis"),
     },
   };
+};
+
+const supabaseAuthAdminUsers = async (supabaseHints) => {
+  const { url, serviceKey } = supabaseConfig(supabaseHints);
+  if (!serviceKey) throw httpError(500, "SUPABASE_SERVICE_ROLE_KEY is required for admin user management");
+  const response = await fetch(`${url}/auth/v1/admin/users?page=1&per_page=1000`, {
+    headers: {
+      apikey: serviceKey,
+      authorization: `Bearer ${serviceKey}`,
+      "content-type": "application/json",
+    },
+  });
+  const text = await response.text();
+  let body;
+  try {
+    body = text ? JSON.parse(text) : {};
+  } catch {
+    body = {};
+  }
+  if (!response.ok) throw httpError(response.status, body?.message || "Supabase users could not be loaded");
+  return Array.isArray(body?.users) ? body.users : [];
+};
+
+const adminUsers = async (request) => {
+  const auth = await requireBetaUser(request);
+  if (!auth.isAdmin) throw httpError(403, "Only PBM admin can manage users");
+
+  if (request.method === "GET") {
+    const accessRows = await supabaseAdminJson(
+      "beta_access?select=email,role,status,daily_ai_limit,can_use_ai_analysis,can_use_pbm_brain,created_at,updated_at&order=created_at.desc&limit=1000",
+      { service: true, supabaseHints: auth.user.supabaseHints },
+    );
+    let authUsers = [];
+    try {
+      authUsers = await supabaseAuthAdminUsers(auth.user.supabaseHints);
+    } catch {
+      authUsers = [];
+    }
+    const accessByEmail = new Map(
+      (Array.isArray(accessRows) ? accessRows : []).map((item) => [
+        String(item.email || "").trim().toLowerCase(),
+        item,
+      ]),
+    );
+    const authByEmail = new Map(
+      authUsers.map((item) => [String(item.email || "").trim().toLowerCase(), item]),
+    );
+    const emails = new Set([...accessByEmail.keys(), ...authByEmail.keys()]);
+    return [...emails].filter(Boolean).map((email) => {
+      const row = accessByEmail.get(email) || defaultUserAccess(email);
+      const authUser = authByEmail.get(email);
+      const isAdmin = ADMIN_EMAILS.has(email) && row.role === "admin";
+      return {
+        email,
+        role: isAdmin ? "admin" : "user",
+        status: row.status || "active",
+        daily_ai_limit: Number(row.daily_ai_limit ?? 10),
+        can_use_ai_analysis: isAdmin || row.can_use_ai_analysis !== false,
+        can_use_pbm_brain: isAdmin || row.can_use_pbm_brain === true,
+        user_id: authUser?.id || null,
+        registered_at: authUser?.created_at || row.created_at || null,
+        last_sign_in_at: authUser?.last_sign_in_at || null,
+      };
+    });
+  }
+
+  if (request.method === "PATCH") {
+    const payload = await requestJson(request);
+    const email = String(payload.email || "").trim().toLowerCase();
+    if (!email) throw httpError(400, "User email is required");
+    if (ADMIN_EMAILS.has(email)) throw httpError(400, "PBM admin access cannot be disabled");
+
+    const update = {
+      can_use_ai_analysis: payload.can_use_ai_analysis !== false,
+      can_use_pbm_brain: payload.can_use_pbm_brain === true,
+      updated_at: new Date().toISOString(),
+    };
+    const rows = await supabaseAdminJson("beta_access?on_conflict=email", {
+      method: "POST",
+      service: true,
+      supabaseHints: auth.user.supabaseHints,
+      headers: { prefer: "resolution=merge-duplicates,return=representation" },
+      body: JSON.stringify({ email, ...update }),
+    });
+    if (!Array.isArray(rows) || !rows[0]) throw httpError(500, "User access could not be saved");
+    return {
+      email,
+      can_use_ai_analysis: rows[0].can_use_ai_analysis !== false,
+      can_use_pbm_brain: rows[0].can_use_pbm_brain === true,
+    };
+  }
+
+  throw httpError(405, "Method not allowed");
 };
 
 const htmlEscape = (value) =>
@@ -1819,6 +1953,7 @@ const buildPbmPrediction = ({ req, data, techScore, aiScore, combinedScore, conf
 
 const analyze = async (request) => {
   const auth = await requireBetaUser(request);
+  requireFeature(auth, "ai_analysis", "AI Analysis is not enabled for this account");
   const req = await requestJson(request);
   if (!req.symbol) throw httpError(400, "symbol is required");
   if (req.current_price == null) throw httpError(400, "current_price is required");
@@ -1908,6 +2043,7 @@ const analyze = async (request) => {
 
 const chat = async (request) => {
   const auth = await requireBetaUser(request);
+  requireFeature(auth, "ai_analysis", "AI Analysis is not enabled for this account");
   await ensureUsageCapacity(auth, "ai_analysis");
   const req = await requestJson(request);
   if (!req.session_id) throw httpError(400, "session_id is required");
@@ -2042,6 +2178,8 @@ const brainPrompt = (req, profile, route) => [
 ].join("\n");
 
 const brainAnalyze = async (request) => {
+  const auth = await requireBetaUser(request);
+  requireFeature(auth, "pbm_brain", "PBM Brain is not enabled for this account");
   const req = await requestJson(request);
   const profile = summarizeBrainData(req);
   const route = routeBrainExpert(req.question, profile);
@@ -2344,6 +2482,9 @@ const handle = async (request) => {
   if (request.method === "GET" && path === "/market/global") return json(await marketGlobal(), 200, request);
   if (request.method === "GET" && path === "/market/search") return json(await marketSearch(url), 200, request);
   if (request.method === "GET" && path === "/me") return json(await accountStatus(request), 200, request);
+  if (path === "/admin/users" && ["GET", "PATCH"].includes(request.method)) {
+    return json(await adminUsers(request), 200, request);
+  }
   if (request.method === "GET" && path === "/system/health") return json(await systemHealth(request), 200, request);
   if (path === "/education/videos" || path.startsWith("/education/videos/")) return json(await educationVideos(request, url, path), 200, request);
   if (path === "/indicators" || path.startsWith("/indicators/")) return json(await indicatorLibrary(request, path), 200, request);

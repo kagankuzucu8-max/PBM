@@ -21,6 +21,7 @@ Cloudflare Dashboard > Workers & Pages > `pbm-marketdesk` > Settings > Variables
 ```text
 REACT_APP_SUPABASE_URL
 REACT_APP_SUPABASE_ANON_KEY
+REACT_APP_TURNSTILE_SITE_KEY
 SUPABASE_URL
 SUPABASE_ANON_KEY
 SUPABASE_SERVICE_ROLE_KEY
@@ -95,6 +96,12 @@ Admin yetkisini sadece `kagankuzucu8@gmail.com` hesabina sabitlemek icin:
 
 ```text
 supabase/admin_transfer_kagankuzucu8.sql
+```
+
+Admin Users paneli ile AI Analysis ve PBM Brain erisimlerini yonetmek icin:
+
+```text
+supabase/admin_users_feature_access_20260608.sql
 ```
 
 ## Deploy kontrolu

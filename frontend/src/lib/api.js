@@ -120,6 +120,11 @@ export async function addTradingViewIndicator(payload) {
   return data;
 }
 
+export async function updateTradingViewIndicator(id, payload) {
+  const { data } = await apiClient.patch(`/indicators/${id}`, payload);
+  return data;
+}
+
 export async function deleteTradingViewIndicator(id) {
   const { data } = await apiClient.delete(`/indicators/${id}`);
   return data;

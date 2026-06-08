@@ -4,6 +4,20 @@ import { Sparkles, ArrowRight, AlertCircle } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { SUPABASE_CONFIGURED } from "@/lib/supabase";
 
+function friendlyAuthError(error) {
+  const message = String(error?.message || "Authentication failed");
+  if (/email rate limit exceeded|rate limit.*email|over_email_send_rate_limit/i.test(message)) {
+    return "Registration email limit reached. Please try again later or contact the PBM admin.";
+  }
+  if (/email address not authorized/i.test(message)) {
+    return "This email cannot receive PBM confirmation messages yet. Contact the PBM admin.";
+  }
+  if (/user already registered|already been registered/i.test(message)) {
+    return "This account already exists. Switch to Sign in.";
+  }
+  return message;
+}
+
 export default function AuthPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -34,7 +48,7 @@ export default function AuthPage() {
         navigate("/");
       }
     } catch (err) {
-      setError(err.message || "Authentication failed");
+      setError(friendlyAuthError(err));
     } finally {
       setLoading(false);
     }
@@ -59,7 +73,6 @@ export default function AuthPage() {
             </div>
             <div>
               <div className="font-heading text-lg font-extrabold tracking-tight leading-none">PBM</div>
-              <div className="text-[10px] tracking-[0.18em] uppercase text-zinc-400 mt-1">AI Trading Terminal</div>
             </div>
           </div>
         </div>

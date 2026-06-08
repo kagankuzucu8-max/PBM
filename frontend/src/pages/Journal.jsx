@@ -22,18 +22,60 @@ const cleanSymbol = (value) => String(value || "").toUpperCase().replace(/[^A-Z0
 
 const toNumber = (value) => {
   if (value == null || value === "") return null;
-  const cleaned = String(value).replace(/[$,%\s"]/g, "").replace(/,/g, "");
+  let cleaned = String(value)
+    .trim()
+    .replace(/\u00a0/g, "")
+    .replace(/[\s'"%\u0024\u20ac\u00a3\u00a5\u20ba\u20bd\u20bf]/g, "");
   const sign = cleaned.startsWith("(") && cleaned.endsWith(")") ? -1 : 1;
-  const normalized = cleaned.replace(/[()+]/g, "");
+  cleaned = cleaned.replace(/[()+]/g, "").replace(/[^\d.,eE+-]/g, "");
+  const comma = cleaned.lastIndexOf(",");
+  const dot = cleaned.lastIndexOf(".");
+  if (comma >= 0 && dot >= 0) {
+    const decimal = comma > dot ? "," : ".";
+    const thousands = decimal === "," ? /\./g : /,/g;
+    cleaned = cleaned.replace(thousands, "").replace(decimal, ".");
+  } else if (comma >= 0) {
+    const groups = cleaned.split(",");
+    cleaned = groups.length > 2 || (groups.length === 2 && groups[1].length === 3)
+      ? groups.join("")
+      : groups.join(".");
+  } else if ((cleaned.match(/\./g) || []).length > 1) {
+    const groups = cleaned.split(".");
+    const decimal = groups.pop();
+    cleaned = decimal.length === 3 ? [...groups, decimal].join("") : `${groups.join("")}.${decimal}`;
+  }
+  const normalized = cleaned;
   const number = Number(normalized);
   return Number.isFinite(number) ? number * sign : null;
 };
 
+const normalizeHeader = (value) => String(value || "")
+  .replace(/^\uFEFF/, "")
+  .replace(/[\u0131\u0130]/g, "i")
+  .replace(/[\u015f\u015e]/g, "s")
+  .replace(/[\u011f\u011e]/g, "g")
+  .replace(/[\u00e7\u00c7]/g, "c")
+  .replace(/[\u00f6\u00d6]/g, "o")
+  .replace(/[\u00fc\u00dc]/g, "u")
+  .normalize("NFD")
+  .replace(/[\u0300-\u036f]/g, "")
+  .toLowerCase()
+  .replace(/&/g, " and ")
+  .replace(/[^a-z0-9]+/g, "");
+
 const firstValue = (row, names) => {
   for (const name of names) {
-    if (row[name] != null && row[name] !== "") return row[name];
+    const value = row[normalizeHeader(name)];
+    if (value != null && String(value).trim() !== "") return value;
   }
   return "";
+};
+
+const sumValues = (row, names) => {
+  const values = [...new Set(names.map(normalizeHeader))]
+    .map((name) => toNumber(row[name]))
+    .filter((value) => value != null);
+  return values.length ? values.reduce((sum, value) => sum + value, 0) : null;
 };
 
 export default function JournalPage() {
@@ -109,9 +151,11 @@ export default function JournalPage() {
       const text = await file.text();
       const rows = parseCsv(text);
       const mapped = rows.map((row) => mapCsvRow(row, user.id)).filter(Boolean);
-      if (!mapped.length) throw new Error("No rows found in CSV.");
-      const { error: insertError } = await supabase.from("journal_entries").insert(mapped);
-      if (insertError) throw insertError;
+      if (!mapped.length) throw new Error("No recognizable trade or account rows found in CSV.");
+      for (let index = 0; index < mapped.length; index += 250) {
+        const { error: insertError } = await supabase.from("journal_entries").insert(mapped.slice(index, index + 250));
+        if (insertError) throw insertError;
+      }
       await reload();
     } catch (err) {
       setError(err.message || "CSV import failed.");
@@ -136,7 +180,13 @@ export default function JournalPage() {
         <label className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-zinc-200 rounded-md text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors cursor-pointer">
           <FileUp className="w-4 h-4" strokeWidth={1.75} />
           {importing ? "Importing..." : "Import CSV"}
-          <input type="file" accept=".csv,text/csv" className="hidden" onChange={importCsv} disabled={importing} />
+          <input
+            type="file"
+            accept=".csv,.tsv,.txt,text/csv,text/tab-separated-values"
+            className="hidden"
+            onChange={importCsv}
+            disabled={importing}
+          />
         </label>
       </div>
 
@@ -375,11 +425,14 @@ function findFrequentMistake(entries) {
 }
 
 function parseCsv(text) {
-  const lines = String(text || "").split(/\r?\n/).filter((line) => line.trim());
-  if (lines.length < 2) return [];
-  const headers = parseCsvLine(lines[0]).map((header) => header.trim());
-  return lines.slice(1).map((line) => {
-    const values = parseCsvLine(line);
+  const source = String(text || "").replace(/^\uFEFF/, "");
+  const delimiter = detectDelimiter(source);
+  const records = parseCsvRecords(source, delimiter).filter((record) => record.some((cell) => String(cell).trim()));
+  if (records.length < 2) return [];
+  const headerIndex = records.findIndex((record) => looksLikeHeader(record));
+  if (headerIndex < 0) return [];
+  const headers = makeUniqueHeaders(records[headerIndex]);
+  return records.slice(headerIndex + 1).map((values) => {
     return headers.reduce((row, header, index) => {
       row[header] = values[index] ?? "";
       return row;
@@ -387,48 +440,192 @@ function parseCsv(text) {
   });
 }
 
-function parseCsvLine(line) {
-  const cells = [];
+function detectDelimiter(text) {
+  const candidates = [",", ";", "\t", "|"];
+  const sample = String(text).slice(0, 50000);
+  const declared = sample.match(/^\s*sep=(.)/im)?.[1];
+  if (declared && candidates.includes(declared)) return declared;
+  return candidates
+    .map((delimiter) => ({
+      delimiter,
+      score: delimiterScore(sample, delimiter),
+    }))
+    .sort((a, b) => b.score - a.score)[0]?.delimiter || ",";
+}
+
+function delimiterScore(text, delimiter) {
+  const records = parseCsvRecords(text, delimiter)
+    .filter((record) => record.some((cell) => String(cell).trim()))
+    .slice(0, 12);
+  const headerScore = Math.max(0, ...records.map((record) => headerRecognitionScore(record)));
+  const widths = records.map((record) => record.length).filter((width) => width > 1);
+  const widthCounts = widths.reduce((counts, width) => {
+    counts.set(width, (counts.get(width) || 0) + 1);
+    return counts;
+  }, new Map());
+  const consistency = Math.max(0, ...widthCounts.values());
+  return headerScore * 1000 + consistency * 10 + Math.max(0, ...widths);
+}
+
+function parseCsvRecords(text, delimiter) {
+  const records = [];
+  let record = [];
   let cell = "";
   let quoted = false;
-  for (let index = 0; index < line.length; index += 1) {
-    const char = line[index];
-    if (char === '"' && line[index + 1] === '"') {
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    if (char === '"' && text[index + 1] === '"') {
       cell += '"';
       index += 1;
     } else if (char === '"') {
       quoted = !quoted;
-    } else if (char === "," && !quoted) {
-      cells.push(cell.trim());
+    } else if (char === delimiter && !quoted) {
+      record.push(cell.trim());
+      cell = "";
+    } else if ((char === "\n" || char === "\r") && !quoted) {
+      if (char === "\r" && text[index + 1] === "\n") index += 1;
+      record.push(cell.trim());
+      records.push(record);
+      record = [];
       cell = "";
     } else {
       cell += char;
     }
   }
-  cells.push(cell.trim());
-  return cells;
+  if (cell || record.length) {
+    record.push(cell.trim());
+    records.push(record);
+  }
+  return records;
+}
+
+function looksLikeHeader(record) {
+  return headerRecognitionScore(record) >= 1;
+}
+
+function headerRecognitionScore(record) {
+  const recognized = new Set([
+    "symbol", "ticker", "instrument", "pair", "asset", "product", "contract", "account",
+    "sembol", "enstruman", "parite", "varlik", "hesap",
+    "date", "time", "datetime", "timestamp", "side", "direction", "type", "action",
+    "tarih", "saat", "tarihsaat", "yon", "taraf", "islemtipi",
+    "entry", "entryprice", "openprice", "exit", "exitprice", "closeprice",
+    "giris", "girisfiyati", "alisfiyati", "cikis", "cikisfiyati", "satisfiyati",
+    "pnl", "profit", "netpnl", "realizedpnl", "closedpnl", "daypnl", "balance",
+    "karzarar", "kar", "netkar", "gerceklesenkarzarar", "bakiye",
+    "qty", "quantity", "size", "contracts", "lots", "volume", "fees", "commission",
+    "miktar", "adet", "kontrat", "lot", "hacim", "ucret", "komisyon",
+  ]);
+  return record.map(normalizeHeader).filter((header) => recognized.has(header)).length;
+}
+
+function makeUniqueHeaders(headers) {
+  const counts = new Map();
+  return headers.map((header, index) => {
+    const base = normalizeHeader(header) || `column${index + 1}`;
+    const count = (counts.get(base) || 0) + 1;
+    counts.set(base, count);
+    return count === 1 ? base : `${base}${count}`;
+  });
+}
+
+function parseTradeDate(value) {
+  if (value == null || String(value).trim() === "") return new Date();
+  const raw = String(value).trim();
+  if (/^\d{10,13}$/.test(raw)) {
+    const numeric = Number(raw);
+    const unixDate = new Date(raw.length === 10 ? numeric * 1000 : numeric);
+    if (!Number.isNaN(unixDate.getTime())) return unixDate;
+  }
+  if (/^\d{5}(?:\.\d+)?$/.test(raw)) {
+    const excelDate = new Date(Date.UTC(1899, 11, 30) + Number(raw) * 86400000);
+    if (!Number.isNaN(excelDate.getTime())) return excelDate;
+  }
+  const separated = raw.match(/^(\d{1,2})([./-])(\d{1,2})\2(\d{2,4})(.*)$/);
+  if (separated && (separated[2] === "." || Number(separated[1]) > 12)) {
+    const year = Number(separated[4].length === 2 ? `20${separated[4]}` : separated[4]);
+    const suffix = String(separated[5] || "").trim();
+    const iso = `${year}-${separated[3].padStart(2, "0")}-${separated[1].padStart(2, "0")}${suffix ? `T${suffix}` : ""}`;
+    const date = new Date(iso);
+    if (!Number.isNaN(date.getTime())) return date;
+  }
+  const direct = new Date(raw);
+  if (!Number.isNaN(direct.getTime())) return direct;
+  if (separated) {
+    const year = Number(separated[4].length === 2 ? `20${separated[4]}` : separated[4]);
+    const suffix = String(separated[5] || "").trim();
+    const date = new Date(`${year}-${separated[3].padStart(2, "0")}-${separated[1].padStart(2, "0")}${suffix ? `T${suffix}` : ""}`);
+    if (!Number.isNaN(date.getTime())) return date;
+  }
+  return new Date();
+}
+
+function normalizeSide(value) {
+  const side = normalizeHeader(value);
+  if (/(sell|short|ask|satis|kisa)/.test(side)) return "short";
+  if (/(buy|long|bid|alis|uzun)/.test(side)) return "long";
+  return side || "long";
 }
 
 function mapCsvRow(row, userId) {
-  const rawSymbol = firstValue(row, ["Symbol", "symbol", "Instrument", "instrument", "Ticker", "ticker", "Account"]);
+  const hasValue = Object.values(row).some((value) => String(value || "").trim());
+  if (!hasValue) return null;
+  const rawSymbol = firstValue(row, [
+    "Symbol", "Ticker", "Instrument", "Instrument Name", "Pair", "Asset", "Product", "Contract",
+    "Market", "Coin", "Security", "Account", "Account Name", "Sembol", "Enstruman", "Parite",
+    "Varlik", "Hesap",
+  ]);
   const symbol = cleanSymbol(rawSymbol);
-  const dateValue = firstValue(row, ["Date", "date", "Time", "time", "Opened", "Closed"]);
-  const tradeDate = dateValue ? new Date(dateValue) : new Date();
-  const pnl = firstValue(row, ["PnL", "P&L", "Closed P&L", "Day P&L", "Realized P&L", "Profit", "Net P&L"]);
-  const quantity = firstValue(row, ["Qty", "Quantity", "Open Qty", "Size", "Contracts"]);
+  const dateValue = firstValue(row, [
+    "Trade Date", "Date", "Date Time", "Datetime", "Timestamp", "Execution Time", "Time",
+    "Open Time", "Entry Time", "Close Time", "Exit Time", "Opened", "Closed", "Created At",
+    "Tarih", "Saat", "Tarih Saat", "Islem Tarihi", "Acilis Zamani", "Kapanis Zamani",
+  ]);
+  const tradeDate = parseTradeDate(dateValue);
+  const pnl = firstValue(row, [
+    "PnL", "P&L", "Profit/Loss", "Profit and Loss", "Closed P&L", "Day P&L", "Realized P&L",
+    "Realised P&L", "Net P&L", "Net Profit", "Gross P&L", "Profit", "Result", "Kar Zarar",
+    "Kar Zarar", "Net Kar", "Gerceklesen Kar Zarar",
+  ]);
+  const quantity = firstValue(row, [
+    "Qty", "Quantity", "Executed", "Filled", "Open Qty", "Size", "Position Size", "Contracts",
+    "Lots", "Lot Size", "Volume", "Units", "Amount", "Miktar", "Adet", "Kontrat", "Lot", "Hacim",
+  ]);
+  const entryPrice = firstValue(row, [
+    "Entry", "Entry Price", "Avg Entry", "Average Entry Price", "Open Price", "Opening Price",
+    "Fill Price", "Execution Price", "Average Price", "Avg Price", "Price", "Giris", "Giris Fiyati",
+    "Alis Fiyati", "Acilis Fiyati",
+  ]);
+  const exitPrice = firstValue(row, [
+    "Exit", "Exit Price", "Avg Exit", "Average Exit Price", "Close Price", "Closing Price",
+    "Exit Average Price", "Settlement Price", "Cikis", "Cikis Fiyati", "Satis Fiyati", "Kapanis Fiyati",
+  ]);
+  const fees = sumValues(row, [
+    "Fees", "Fee", "Commission", "Commissions", "Trading Fee", "Swap", "Tax", "Ucret", "Komisyon", "Vergi",
+  ]);
+  const strategy = firstValue(row, ["Strategy", "Setup", "Playbook", "Tag", "Tags", "Label", "Strateji", "Kurulum", "Etiket"]);
+  const noteParts = [
+    firstValue(row, ["Notes", "Note", "Comment", "Comments", "Reason", "Description", "Not", "Notlar", "Aciklama"]),
+    firstValue(row, ["Status", "Order Status", "Durum"]),
+    firstValue(row, ["Broker", "Exchange", "Venue", "Firm", "Prop Firm", "Borsa", "Araci Kurum"]),
+  ].filter((value) => String(value || "").trim());
+  const meaningful = rawSymbol || pnl !== "" || entryPrice !== "" || exitPrice !== "" || quantity !== "";
+  if (!meaningful) return null;
   return {
     user_id: userId,
-    trade_date: Number.isNaN(tradeDate.getTime()) ? new Date().toISOString() : tradeDate.toISOString(),
+    trade_date: tradeDate.toISOString(),
     symbol,
     market: getMarketType(symbol),
-    side: String(firstValue(row, ["Side", "side", "Direction"]) || "long").toLowerCase(),
-    entry_price: toNumber(firstValue(row, ["Entry", "Entry Price", "Avg Entry", "Open Price"])),
-    exit_price: toNumber(firstValue(row, ["Exit", "Exit Price", "Avg Exit", "Close Price"])),
+    side: normalizeSide(firstValue(row, [
+      "Side", "Direction", "Action", "Order Side", "Trade Type", "Type", "Position", "Yon", "Taraf", "Islem Tipi",
+    ])),
+    entry_price: toNumber(entryPrice),
+    exit_price: toNumber(exitPrice),
     quantity: toNumber(quantity),
-    fees: toNumber(firstValue(row, ["Fees", "Commission", "Commissions"])) || 0,
+    fees: fees || 0,
     pnl: toNumber(pnl),
-    strategy: firstValue(row, ["Strategy", "Setup", "Playbook"]),
-    notes: firstValue(row, ["Notes", "Status", "Comment"]),
+    strategy,
+    notes: [...new Set(noteParts.map((part) => String(part).trim()))].join(" / "),
     source: "csv",
   };
 }

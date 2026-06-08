@@ -70,9 +70,6 @@ export default function Layout({ children }) {
               <div className="font-heading text-base font-extrabold tracking-tight text-zinc-950 leading-none">
                 PBM
               </div>
-              <div className="text-[10px] tracking-[0.18em] uppercase text-zinc-500 mt-1">
-                AI Trading
-              </div>
             </div>
           </Link>
         </div>
@@ -129,9 +126,6 @@ export default function Layout({ children }) {
               <div className="font-heading text-base font-extrabold tracking-tight text-zinc-950 leading-none">
                 PBM
               </div>
-              <div className="text-[10px] tracking-[0.18em] uppercase text-zinc-500 mt-1">
-                AI Trading
-              </div>
             </div>
           </Link>
           <div className="flex items-center gap-2">
@@ -176,9 +170,6 @@ export default function Layout({ children }) {
                 <div>
                   <div className="font-heading text-base font-extrabold tracking-tight text-zinc-950 leading-none">
                     PBM
-                  </div>
-                  <div className="text-[10px] tracking-[0.18em] uppercase text-zinc-500 mt-1">
-                    AI Trading
                   </div>
                 </div>
               </div>

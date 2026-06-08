@@ -839,16 +839,82 @@ const cleanTradingViewUrl = (value) => {
   }
 };
 
+const cleanHttpUrl = (value) => {
+  const raw = String(value || "").trim();
+  try {
+    const parsed = new URL(raw);
+    return ["http:", "https:"].includes(parsed.protocol) ? parsed.toString() : "";
+  } catch {
+    return "";
+  }
+};
+
+const decodeHtmlEntities = (value) =>
+  String(value || "")
+    .replace(/&amp;/gi, "&")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">");
+
+const resolveTradingViewImage = async (tradingviewUrl) => {
+  const safeUrl = cleanTradingViewUrl(tradingviewUrl);
+  if (!safeUrl) return "";
+  try {
+    const response = await fetch(safeUrl, {
+      redirect: "follow",
+      headers: {
+        "user-agent": "Mozilla/5.0 (compatible; PBM/1.0; +https://pbmdesk.pbmsolutions.workers.dev)",
+        accept: "text/html,application/xhtml+xml",
+      },
+    });
+    if (!response.ok) return "";
+    const html = (await response.text()).slice(0, 750000);
+    const patterns = [
+      /<meta[^>]+property=["']og:image(?::secure_url)?["'][^>]+content=["']([^"']+)["'][^>]*>/i,
+      /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image(?::secure_url)?["'][^>]*>/i,
+      /<meta[^>]+name=["']twitter:image(?::src)?["'][^>]+content=["']([^"']+)["'][^>]*>/i,
+      /<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image(?::src)?["'][^>]*>/i,
+    ];
+    for (const pattern of patterns) {
+      const match = html.match(pattern)?.[1];
+      const imageUrl = cleanHttpUrl(decodeHtmlEntities(match));
+      if (imageUrl) return imageUrl;
+    }
+  } catch {
+    // TradingView may block previews for private links; the manual banner remains available.
+  }
+  return "";
+};
+
 const indicatorLibrary = async (request, path) => {
   if (request.method === "GET") {
     const params = new URLSearchParams({
-      select: "*",
+      select: "id,user_id,title,description,tradingview_url,banner_url,created_at",
       order: "created_at.desc",
       limit: "100",
     });
-    return supabaseAdminJson(`tradingview_indicators?${params}`, {
+    const rows = await supabaseAdminJson(`tradingview_indicators?${params}`, {
       supabaseHints: supabaseHintsFromRequest(request),
     });
+    let previewBudget = 6;
+    return Promise.all((Array.isArray(rows) ? rows : []).map(async (indicator) => {
+      if (indicator.banner_url || previewBudget <= 0) return indicator;
+      previewBudget -= 1;
+      const bannerUrl = await resolveTradingViewImage(indicator.tradingview_url);
+      if (!bannerUrl) return indicator;
+      try {
+        await supabaseAdminJson(`tradingview_indicators?id=eq.${indicator.id}`, {
+          method: "PATCH",
+          service: true,
+          headers: { prefer: "return=minimal" },
+          body: JSON.stringify({ banner_url: bannerUrl }),
+        });
+      } catch {
+        // Return the discovered preview even if an older database cannot persist it yet.
+      }
+      return { ...indicator, banner_url: bannerUrl };
+    }));
   }
 
   if (request.method === "POST") {
@@ -858,7 +924,7 @@ const indicatorLibrary = async (request, path) => {
     const title = String(req.title || "").trim().slice(0, 140);
     const description = String(req.description || "").trim().slice(0, 1000);
     const tradingviewUrl = cleanTradingViewUrl(req.tradingview_url);
-    const bannerUrl = String(req.banner_url || "").trim().slice(0, 2000);
+    const bannerUrl = cleanHttpUrl(req.banner_url) || await resolveTradingViewImage(tradingviewUrl);
     if (!title || !tradingviewUrl) throw httpError(400, "Indicator name and a public TradingView link are required");
     const rows = await supabaseAdminJson("tradingview_indicators", {
       method: "POST",
@@ -866,7 +932,31 @@ const indicatorLibrary = async (request, path) => {
       headers: { prefer: "return=representation" },
       body: JSON.stringify({
         user_id: auth.user.id,
-        author_email: auth.user.email,
+        title,
+        description,
+        tradingview_url: tradingviewUrl,
+        banner_url: bannerUrl,
+      }),
+    });
+    return Array.isArray(rows) ? rows[0] : rows;
+  }
+
+  if (request.method === "PATCH") {
+    const auth = await requireBetaUser(request);
+    if (!auth.isAdmin) throw httpError(403, "Only PBM admin can edit indicators");
+    const match = path.match(/^\/indicators\/([^/]+)$/);
+    if (!match || !/^[0-9a-f-]{36}$/i.test(match[1])) throw httpError(400, "Invalid indicator id");
+    const req = await requestJson(request);
+    const title = String(req.title || "").trim().slice(0, 140);
+    const description = String(req.description || "").trim().slice(0, 1000);
+    const tradingviewUrl = cleanTradingViewUrl(req.tradingview_url);
+    const bannerUrl = cleanHttpUrl(req.banner_url) || await resolveTradingViewImage(tradingviewUrl);
+    if (!title || !tradingviewUrl) throw httpError(400, "Indicator name and a public TradingView link are required");
+    const rows = await supabaseAdminJson(`tradingview_indicators?id=eq.${match[1]}`, {
+      method: "PATCH",
+      service: true,
+      headers: { prefer: "return=representation" },
+      body: JSON.stringify({
         title,
         description,
         tradingview_url: tradingviewUrl,

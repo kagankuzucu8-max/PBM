@@ -133,7 +133,15 @@ async function directSignUp(email, password) {
     { email, password },
   );
   if (!ok) {
-    throw new Error(body?.error_description || body?.msg || body?.message || "Sign up failed");
+    const detail = body?.error_description || body?.msg || body?.message || "Sign up failed";
+    if (/email rate limit exceeded|rate limit.*email|over_email_send_rate_limit/i.test(detail)) {
+      try {
+        return await directPasswordSignIn(email, password);
+      } catch {
+        throw new Error("Registration email limit reached. Please try again later or contact the PBM admin.");
+      }
+    }
+    throw new Error(detail);
   }
   if (body?.access_token && body?.refresh_token) {
     const directSession = buildDirectSession(body, email);

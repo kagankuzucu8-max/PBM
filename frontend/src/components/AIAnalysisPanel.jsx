@@ -27,7 +27,7 @@ export default function AIAnalysisPanel({ analysis, loading, onRun, lastUpdated,
   const showUsage = !isAdmin && usage?.limit != null;
   return (
     <div className="bg-slate-50 border border-slate-200 rounded-lg overflow-hidden">
-      <div className="px-6 py-4 border-b border-slate-200 bg-white/40 flex items-center justify-between">
+      <div className="px-6 py-4 border-b border-slate-200 bg-white/40 flex items-center justify-between flex-wrap sm:flex-nowrap gap-3">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-md bg-slate-900 flex items-center justify-center">
             <Sparkles className="w-4 h-4 text-white" strokeWidth={2} />
@@ -38,7 +38,7 @@ export default function AIAnalysisPanel({ analysis, loading, onRun, lastUpdated,
           </div>
         </div>
         {showUsage && (
-          <div className="text-xs text-slate-500 tabular-nums">
+          <div className="order-3 sm:order-none w-full sm:w-auto text-xs text-slate-500 tabular-nums" data-testid="ai-usage-limit">
             AI left: <span className="font-semibold text-slate-900">{usage.remaining}</span>/{usage.limit} today
           </div>
         )}

@@ -360,7 +360,7 @@ const accountStatus = async (request) => {
 const supabaseAuthAdminUsers = async (supabaseHints) => {
   const { url, serviceKey } = supabaseConfig(supabaseHints);
   if (!serviceKey) throw httpError(500, "SUPABASE_SERVICE_ROLE_KEY is required for admin user management");
-  const response = await fetch(`${url}/auth/v1/admin/users?page=1&per_page=1000`, {
+  const response = await fetch(`${url}/auth/v1/admin/users?page=1&per_page=200`, {
     headers: {
       apikey: serviceKey,
       authorization: `Bearer ${serviceKey}`,
@@ -375,7 +375,10 @@ const supabaseAuthAdminUsers = async (supabaseHints) => {
     body = {};
   }
   if (!response.ok) throw httpError(response.status, body?.message || "Supabase users could not be loaded");
-  return Array.isArray(body?.users) ? body.users : [];
+  if (Array.isArray(body)) return body;
+  if (Array.isArray(body?.users)) return body.users;
+  if (Array.isArray(body?.data?.users)) return body.data.users;
+  return [];
 };
 
 const adminUsers = async (request) => {
@@ -383,6 +386,16 @@ const adminUsers = async (request) => {
   if (!auth.isAdmin) throw httpError(403, "Only PBM admin can manage users");
 
   if (request.method === "GET") {
+    try {
+      await supabaseAdminJson("rpc/sync_auth_users_to_beta_access", {
+        method: "POST",
+        service: true,
+        supabaseHints: auth.user.supabaseHints,
+        body: "{}",
+      });
+    } catch {
+      // Older schemas may not have the sync RPC yet. Auth Admin remains the fallback.
+    }
     const accessRows = await supabaseAdminJson(
       "beta_access?select=email,role,status,daily_ai_limit,can_use_ai_analysis,can_use_pbm_brain,created_at,updated_at&order=created_at.desc&limit=1000",
       { service: true, supabaseHints: auth.user.supabaseHints },

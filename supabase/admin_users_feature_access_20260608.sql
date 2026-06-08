@@ -7,13 +7,27 @@ alter table public.beta_access
 alter table public.beta_access
   add column if not exists can_use_pbm_brain boolean not null default false;
 
+insert into public.beta_access (
+  email, role, status, weekly_ai_limit, daily_ai_limit,
+  can_post_social, can_add_education, can_use_ai_analysis, can_use_pbm_brain, notes
+)
+select
+  lower(users.email),
+  case when lower(users.email) = 'kagankuzucu8@gmail.com' then 'admin' else 'user' end,
+  'active',
+  10,
+  10,
+  false,
+  false,
+  true,
+  case when lower(users.email) = 'kagankuzucu8@gmail.com' then true else false end,
+  'PBM account'
+from auth.users as users
+where nullif(trim(users.email), '') is not null
+on conflict (email) do nothing;
+
 update public.beta_access
-set can_use_ai_analysis = true,
-    can_use_pbm_brain = case
-      when lower(email) = 'kagankuzucu8@gmail.com' then true
-      else false
-    end,
-    status = 'active',
+set status = 'active',
     updated_at = now();
 
 update public.beta_access
@@ -87,5 +101,50 @@ begin
     on conflict do nothing;
   return new;
 end $$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
+
+create or replace function public.sync_auth_users_to_beta_access()
+returns integer
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+declare
+  inserted_count integer := 0;
+begin
+  if coalesce(auth.jwt() ->> 'role', '') <> 'service_role'
+     and lower(coalesce(auth.jwt() ->> 'email', '')) <> 'kagankuzucu8@gmail.com' then
+    raise exception 'Only PBM admin can synchronize users';
+  end if;
+
+  insert into public.beta_access (
+    email, role, status, weekly_ai_limit, daily_ai_limit,
+    can_post_social, can_add_education, can_use_ai_analysis, can_use_pbm_brain, notes
+  )
+  select
+    lower(users.email),
+    case when lower(users.email) = 'kagankuzucu8@gmail.com' then 'admin' else 'user' end,
+    'active',
+    10,
+    10,
+    false,
+    false,
+    true,
+    case when lower(users.email) = 'kagankuzucu8@gmail.com' then true else false end,
+    'PBM account'
+  from auth.users as users
+  where nullif(trim(users.email), '') is not null
+  on conflict (email) do nothing;
+
+  get diagnostics inserted_count = row_count;
+  return inserted_count;
+end $$;
+
+revoke all on function public.sync_auth_users_to_beta_access() from public, anon, authenticated;
+grant execute on function public.sync_auth_users_to_beta_access() to service_role;
 
 notify pgrst, 'reload schema';

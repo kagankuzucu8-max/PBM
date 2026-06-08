@@ -56,6 +56,43 @@ function MetricRow({ label, value, secondary }) {
   );
 }
 
+function TechnicalHeatBar({ score, label }) {
+  const clampedScore = Math.max(-100, Math.min(100, Number(score) || 0));
+  const position = (clampedScore + 100) / 2;
+  const displayScore = Math.round(clampedScore);
+  const displayLabel = {
+    strong_buy: "Strong Buy",
+    buy: "Buy",
+    neutral: "Neutral",
+    sell: "Sell",
+    strong_sell: "Strong Sell",
+  }[label || "neutral"];
+  const tooltip = `${displayLabel} ${displayScore > 0 ? "+" : ""}${displayScore}`;
+
+  return (
+    <button
+      type="button"
+      className="relative group shrink-0 py-3 focus:outline-none"
+      aria-label={`Technical score: ${tooltip}`}
+      title={tooltip}
+      data-testid="tech-verdict"
+    >
+      <span
+        className="block relative w-28 sm:w-32 h-2 rounded-full border border-zinc-200"
+        style={{ background: "linear-gradient(90deg, #e11d48 0%, #f4f4f5 50%, #10b981 100%)" }}
+      >
+        <span
+          className="absolute top-1/2 w-3 h-3 rounded-full bg-white border-2 border-zinc-900 shadow-sm -translate-x-1/2 -translate-y-1/2 transition-[left] duration-300"
+          style={{ left: `${position}%` }}
+        />
+      </span>
+      <span className="pointer-events-none absolute right-0 top-full z-20 whitespace-nowrap rounded bg-zinc-950 px-2 py-1 text-[11px] font-semibold text-white opacity-0 shadow-sm transition-opacity group-hover:opacity-100 group-focus:opacity-100">
+        {tooltip}
+      </span>
+    </button>
+  );
+}
+
 export default function TechnicalPanel({ snapshot, price, quickScore, quickLabel }) {
   if (!snapshot) {
     return (
@@ -66,14 +103,6 @@ export default function TechnicalPanel({ snapshot, price, quickScore, quickLabel
   }
 
   const score = quickScore || 0;
-  const scoreColor = score >= 20 ? "text-emerald-600" : score <= -20 ? "text-rose-600" : "text-zinc-700";
-  const labelMap = {
-    strong_buy: { text: "Strong Buy", bg: "bg-emerald-100", color: "text-emerald-700" },
-    buy: { text: "Buy", bg: "bg-emerald-50", color: "text-emerald-600" },
-    neutral: { text: "Neutral", bg: "bg-zinc-100", color: "text-zinc-600" },
-    sell: { text: "Sell", bg: "bg-rose-50", color: "text-rose-600" },
-    strong_sell: { text: "Strong Sell", bg: "bg-rose-100", color: "text-rose-700" },
-  }[quickLabel || "neutral"];
 
   return (
     <div className="bg-white border border-zinc-200 rounded-lg overflow-hidden">
@@ -82,9 +111,7 @@ export default function TechnicalPanel({ snapshot, price, quickScore, quickLabel
           <div className="text-[11px] tracking-[0.1em] uppercase font-semibold text-zinc-500">Technical Engine</div>
           <div className="text-lg font-heading font-bold tracking-tight text-zinc-950 mt-0.5">Indicator Snapshot</div>
         </div>
-        <div className={`px-3 py-1 rounded-full text-xs font-semibold ${labelMap.bg} ${labelMap.color}`} data-testid="tech-verdict">
-          {labelMap.text} <span className={`ml-1 tabular-nums ${scoreColor}`}>{score.toFixed(0)}</span>
-        </div>
+        <TechnicalHeatBar score={score} label={quickLabel} />
       </div>
       <div className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4">
         <Gauge label="RSI 14" value={snapshot.rsi} lowThresh={30} highThresh={70} />

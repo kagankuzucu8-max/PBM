@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+build/
+!frontend/build/
+!frontend/build/**
+.cache/
+yarn-error.log
+
+# Env (NEVER commit secrets)
+.env
+.env.local
+.env.*.local
+backend/.env
+frontend/.env
+!*.example
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+
+# Emergent / Internal
+.emergent/
+test_reports/pytest/
+local_ml/output/
+local_ml/build/
+local_ml/dist/
+local_ml/*.spec
+telegram_analytics/.env
+telegram_analytics/data/
+telegram_analytics/__pycache__/
+telegram_analytics/tests/__pycache__/
+*.zip
+!mobile/android-template.zip

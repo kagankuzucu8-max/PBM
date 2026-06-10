@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PBM - X Makale Taslağı</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: #d4d4d8; color: #18181b; font-family: Arial, Helvetica, sans-serif; }
+    @page { size: A4; margin: 0; }
+    .page {
+      width: 210mm;
+      height: 297mm;
+      margin: 0 auto 10mm;
+      padding: 18mm;
+      background: #fafafa;
+      position: relative;
+      overflow: hidden;
+      page-break-after: always;
+    }
+    .page:last-child { page-break-after: auto; }
+    .dark { background: #09090b; color: #fafafa; }
+    .brand { display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 800; }
+    .brand-icon {
+      width: 34px; height: 34px; border-radius: 6px; background: #fafafa; color: #09090b;
+      display: grid; place-items: center; font-size: 18px;
+    }
+    .dark .brand-icon { background: #fafafa; color: #09090b; }
+    .page-no { position: absolute; right: 18mm; bottom: 12mm; font-size: 10px; color: #71717a; }
+    .eyebrow { margin-top: 26mm; color: #71717a; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.6px; }
+    .dark .eyebrow { color: #a1a1aa; }
+    h1 { margin: 5mm 0 5mm; font-size: 39px; line-height: 1.04; letter-spacing: -1px; max-width: 160mm; }
+    h2 { margin: 3mm 0 5mm; font-size: 28px; line-height: 1.08; letter-spacing: -0.5px; }
+    h3 { margin: 0 0 2mm; font-size: 15px; line-height: 1.2; }
+    p { margin: 0 0 4mm; font-size: 12.5px; line-height: 1.65; color: #52525b; }
+    .dark p { color: #d4d4d8; }
+    .lead { font-size: 16px; line-height: 1.55; max-width: 150mm; }
+    .accent { color: #10b981; }
+    .divider { width: 100%; height: 1px; background: #e4e4e7; margin: 7mm 0; }
+    .dark .divider { background: #27272a; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; }
+    .grid.three { grid-template-columns: repeat(3, 1fr); }
+    .card {
+      background: #fff; border: 1px solid #e4e4e7; border-radius: 6px; padding: 5mm;
+      min-height: 36mm;
+    }
+    .dark .card { background: #18181b; border-color: #3f3f46; }
+    .card p { margin: 0; font-size: 10.8px; line-height: 1.55; }
+    .num {
+      width: 7mm; height: 7mm; margin-bottom: 4mm; border-radius: 4px; display: grid; place-items: center;
+      background: #18181b; color: #fff; font-size: 10px; font-weight: 700;
+    }
+    .dark .num { background: #fafafa; color: #18181b; }
+    .quote {
+      margin-top: 12mm; padding: 7mm; border-left: 3px solid #10b981;
+      background: #f4f4f5; font-size: 16px; line-height: 1.5; font-weight: 700;
+    }
+    .dark .quote { background: #18181b; }
+    .article {
+      margin-top: 8mm; padding: 6mm; background: #fff; border: 1px solid #e4e4e7; border-radius: 6px;
+    }
+    .article p { font-size: 12px; line-height: 1.62; margin-bottom: 4mm; }
+    .tag {
+      display: inline-block; padding: 1.5mm 2.5mm; margin: 0 1.2mm 1.2mm 0;
+      border: 1px solid #d4d4d8; border-radius: 4px; font-size: 9px; font-weight: 700; color: #52525b;
+    }
+    .flow { display: grid; grid-template-columns: 1fr 10mm 1fr 10mm 1fr; align-items: center; margin: 10mm 0; }
+    .flow-box { border: 1px solid #e4e4e7; border-radius: 6px; background: #fff; padding: 5mm; min-height: 35mm; }
+    .arrow { text-align: center; color: #a1a1aa; font-size: 18px; }
+    .footer-note { position: absolute; left: 18mm; bottom: 12mm; font-size: 9px; color: #71717a; }
+    .hero-line { width: 70mm; height: 2px; background: #10b981; margin-top: 10mm; }
+    .mock {
+      margin-top: 13mm; border: 1px solid #3f3f46; border-radius: 7px; background: #18181b; padding: 5mm;
+      display: grid; grid-template-columns: 35mm 1fr; gap: 4mm; min-height: 70mm;
+    }
+    .sidebar { border-right: 1px solid #3f3f46; padding-right: 4mm; }
+    .side-item { height: 7mm; margin-bottom: 3mm; border-radius: 3px; background: #27272a; }
+    .side-item.active { background: #fafafa; }
+    .mock-main { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3mm; align-content: start; }
+    .mock-title { grid-column: 1 / -1; height: 9mm; width: 55%; background: #fafafa; border-radius: 3px; margin-bottom: 3mm; }
+    .mock-card { height: 22mm; border: 1px solid #3f3f46; border-radius: 4px; background: #09090b; }
+    .mock-wide { grid-column: 1 / -1; height: 35mm; border: 1px solid #3f3f46; border-radius: 4px; background: #09090b; }
+    @media print {
+      html, body { background: #fff; }
+      .page { margin: 0; }
+    }
+  </style>
+</head>
+<body>
+  <section class="page dark">
+    <div class="brand"><div class="brand-icon">✦</div><span>PBM</span></div>
+    <div class="eyebrow">X Makale Taslağı · Haziran 2026</div>
+    <h1>Bir traderın ihtiyaç duyduğu çalışma alanını tek yerde toplamak.</h1>
+    <p class="lead">PBM; piyasa takibi, teknik analiz, yapay zekâ destekli yorumlama, işlem günlüğü, eğitim ve kişisel öğrenme sistemini aynı çalışma alanında birleştiren bir trading platformudur.</p>
+    <div class="hero-line"></div>
+    <div class="mock">
+      <div class="sidebar">
+        <div class="side-item active"></div><div class="side-item"></div><div class="side-item"></div>
+        <div class="side-item"></div><div class="side-item"></div><div class="side-item"></div>
+      </div>
+      <div class="mock-main">
+        <div class="mock-title"></div>
+        <div class="mock-card"></div><div class="mock-card"></div><div class="mock-card"></div>
+        <div class="mock-wide"></div>
+      </div>
+    </div>
+    <div class="footer-note">Bu doküman X makalesi olarak paylaşılabilecek sade bir sistem tanıtım taslağıdır.</div>
+    <div class="page-no">01</div>
+  </section>
+
+  <section class="page">
+    <div class="brand"><div class="brand-icon" style="background:#18181b;color:#fff">✦</div><span>PBM</span></div>
+    <div class="eyebrow">Makale başlangıcı</div>
+    <h2>PBM nedir?</h2>
+    <div class="article">
+      <p>Uzun süredir traderların günlük iş akışını daha düzenli ve anlamlı hale getirecek bir sistem üzerinde çalışıyorum: <strong>PBM</strong>.</p>
+      <p>Birçok trader grafiklerini farklı bir platformda inceliyor, analizlerini başka bir yerde tutuyor, işlemlerini ayrı bir tabloda kaydediyor ve zaman içinde neyi doğru ya da yanlış yaptığını takip etmekte zorlanıyor.</p>
+      <p>PBM’nin çıkış noktası oldukça basit: <strong>piyasa verisini görmek, analiz üretmek, alınan kararları kaydetmek ve bu kararlardan öğrenmek için tek bir çalışma alanı oluşturmak.</strong></p>
+      <p>Sistem bir sinyal dağıtma aracı olmak yerine, traderın karar sürecini destekleyen ve kendi performansını daha net görmesini sağlayan bir terminal olarak geliştiriliyor.</p>
+    </div>
+    <div class="quote">Amaç daha fazla işlem açtırmak değil; daha bilinçli karar verilmesini sağlamak.</div>
+    <div class="divider"></div>
+    <span class="tag">Piyasa takibi</span><span class="tag">Teknik analiz</span><span class="tag">AI yorumlama</span>
+    <span class="tag">Journal</span><span class="tag">Eğitim</span><span class="tag">Kişisel öğrenme</span>
+    <div class="page-no">02</div>
+  </section>
+
+  <section class="page">
+    <div class="brand"><div class="brand-icon" style="background:#18181b;color:#fff">✦</div><span>PBM</span></div>
+    <div class="eyebrow">Piyasa ve analiz</div>
+    <h2>Piyasayı görmekten, anlamlandırmaya.</h2>
+    <p>PBM’nin merkezinde, seçilen varlık için grafik, piyasa bilgisi, teknik göstergeler ve AI analizini aynı ekranda bir araya getiren analiz alanı bulunuyor.</p>
+    <div class="flow">
+      <div class="flow-box"><h3>1. Piyasa verisi</h3><p>Kripto, forex ve endeksler arasında geçiş; fiyat, günlük değişim, hacim ve takip listeleri.</p></div>
+      <div class="arrow">→</div>
+      <div class="flow-box"><h3>2. Teknik motor</h3><p>RSI, MACD, ADX, hareketli ortalamalar, Bollinger Bands ve diğer teknik ölçümler.</p></div>
+      <div class="arrow">→</div>
+      <div class="flow-box"><h3>3. AI analizi</h3><p>Teknik verileri sade bir özet, yön değerlendirmesi, riskler ve olası senaryolar halinde yorumlar.</p></div>
+    </div>
+    <div class="grid">
+      <div class="card"><div class="num">A</div><h3>TradingView entegrasyonu</h3><p>Grafikler TradingView görünümüyle incelenebilir; zaman dilimleri arasında geçiş yapılabilir ve grafik tam ekran kullanılabilir.</p></div>
+      <div class="card"><div class="num">B</div><h3>Analiz değişim takibi</h3><p>Aynı parite için önceki AI değerlendirmesi ile güncel analiz karşılaştırılır; görüşün nasıl değiştiği görülebilir.</p></div>
+      <div class="card"><div class="num">C</div><h3>Watchlist ve uyarılar</h3><p>Takip edilen varlıklar özel listelerde tutulur; önemli hareketler ve güncellemeler için bildirim altyapısı kullanılabilir.</p></div>
+      <div class="card"><div class="num">D</div><h3>Analiz geçmişi</h3><p>Üretilen analizler kullanıcıya özel olarak saklanır. Böylece geçmiş kararlar daha sonra yeniden değerlendirilebilir.</p></div>
+    </div>
+    <div class="page-no">03</div>
+  </section>
+
+  <section class="page">
+    <div class="brand"><div class="brand-icon" style="background:#18181b;color:#fff">✦</div><span>PBM</span></div>
+    <div class="eyebrow">Trader çalışma alanı</div>
+    <h2>Sadece analiz değil, düzenli bir trading süreci.</h2>
+    <div class="grid">
+      <div class="card"><div class="num">01</div><h3>Journal</h3><p>İşlemler manuel olarak veya CSV dosyasından eklenebilir. P&amp;L, kazanma oranı, strateji, notlar ve haftalık trader raporu tek yerde tutulur.</p></div>
+      <div class="card"><div class="num">02</div><h3>Payout Tracker</h3><p>Prop firm hesapları, drawdown limitleri, mevcut bakiyeler, payout tarihleri ve ödeme kayıtları takip edilebilir.</p></div>
+      <div class="card"><div class="num">03</div><h3>Social</h3><p>Yönetici tarafından paylaşılan pozisyonlar ve piyasa değerlendirmeleri kanal mantığında herkese ulaşır. Görseller büyütülerek incelenebilir.</p></div>
+      <div class="card"><div class="num">04</div><h3>Education</h3><p>Seçilmiş eğitim videoları doğrudan sistem içinde izlenebilir. İçerikler tek bir eğitim kütüphanesinde düzenli biçimde tutulur.</p></div>
+      <div class="card"><div class="num">05</div><h3>Indicators</h3><p>PBM’nin seçtiği veya geliştirdiği TradingView indikatörleri, açıklama ve erişim bağlantılarıyla tek kütüphanede sunulur.</p></div>
+      <div class="card"><div class="num">06</div><h3>Mobil kullanım</h3><p>Web, ana ekrana eklenebilen PWA ve Android uygulama yapısı sayesinde aynı hesap ve veriler farklı cihazlardan kullanılabilir.</p></div>
+    </div>
+    <div class="quote">Her kullanıcının journal, watchlist, analiz geçmişi ve çalışma verileri kendi hesabına özel tutulur.</div>
+    <div class="page-no">04</div>
+  </section>
+
+  <section class="page dark">
+    <div class="brand"><div class="brand-icon">✦</div><span>PBM</span></div>
+    <div class="eyebrow">PBM Brain</div>
+    <h2>Traderın kendi verisinden öğrenen kişisel bir çalışma katmanı.</h2>
+    <p class="lead">PBM Brain; journal kayıtlarını, geçmiş analizleri, paylaşılan pozisyonları ve kaydedilen öğrenme notlarını birlikte değerlendirerek kullanıcının işlem alışkanlıklarına dair bir profil oluşturmaya hazırlanıyor.</p>
+    <div class="grid" style="margin-top:10mm">
+      <div class="card"><div class="num">1</div><h3>Veriyi toplar</h3><p>Journal, analiz geçmişi, sosyal pozisyonlar ve kullanıcı notları tek bir çalışma bağlamında bir araya gelir.</p></div>
+      <div class="card"><div class="num">2</div><h3>Davranışı yorumlar</h3><p>Tekrarlanan hatalar, başarılı koşullar, disiplin ve risk davranışı gibi alanları değerlendirmeye yardımcı olur.</p></div>
+      <div class="card"><div class="num">3</div><h3>Geri bildirimden öğrenir</h3><p>AI Teaching alanında analizlerin doğru veya yanlış sonuçları kaydedilir ve haftalık eğitim verisine dönüştürülebilir.</p></div>
+      <div class="card"><div class="num">4</div><h3>Yerel ML’e hazırlanır</h3><p>Toplanan veriler dışa aktarılabilir, yerel makine öğrenmesi çalışmalarında işlenebilir ve yeni öğrenme notları sisteme geri alınabilir.</p></div>
+    </div>
+    <div class="quote">PBM Brain’in amacı piyasayı kusursuz tahmin etmek değil; traderın kendi karar sürecini ölçülebilir hale getirmek.</div>
+    <div class="page-no">05</div>
+  </section>
+
+  <section class="page">
+    <div class="brand"><div class="brand-icon" style="background:#18181b;color:#fff">✦</div><span>PBM</span></div>
+    <div class="eyebrow">Makale kapanışı</div>
+    <h2>PBM’yi neden geliştiriyorum?</h2>
+    <div class="article">
+      <p>Trading tarafında en büyük sorunlardan biri veri eksikliği değil, dağınıklık. Grafikler, notlar, analizler, eğitim içerikleri ve performans kayıtları birbirinden kopuk olduğunda traderın kendi gelişimini görmesi zorlaşıyor.</p>
+      <p>PBM ile bu parçaları sade bir terminal içinde birleştirmeyi amaçlıyorum. Sistem; piyasa analizi yaparken aynı zamanda kararların kaydedildiği, sonuçların takip edildiği ve zamanla daha kişisel hale gelen bir çalışma alanı sunuyor.</p>
+      <p>Altyapı kullanıcı verilerini birbirinden ayıracak şekilde hazırlanıyor. AI kullanımı ve PBM Brain gibi özellikler hesap bazında yönetilebiliyor; analizler, journal kayıtları ve kişisel veriler kullanıcıya özel saklanıyor.</p>
+      <p>Şu anda sistem geliştirme ve sınırlı kullanıcı testleri aşamasında. Gerçek kullanım geri bildirimleriyle analiz kalitesini, mobil deneyimi ve kişisel öğrenme katmanını geliştirmeye devam edeceğim.</p>
+    </div>
+    <div class="quote">PBM, tek bir “al/sat” cevabı vermek yerine traderın kendi sistemini kurmasına yardımcı olmak için geliştiriliyor.</div>
+    <div class="divider"></div>
+    <p style="font-size:10px"><strong>Not:</strong> PBM tarafından sunulan analizler yatırım tavsiyesi değildir. Sistem, eğitim ve karar destek amacıyla geliştirilmiştir. Piyasalardaki tüm işlemler risk içerir.</p>
+    <div class="page-no">06</div>
+  </section>
+
+  <section class="page dark">
+    <div class="brand"><div class="brand-icon">✦</div><span>PBM</span></div>
+    <div class="eyebrow">X için kısa paylaşım metni</div>
+    <h2>PBM üzerinde uzun süredir çalışıyorum.</h2>
+    <div class="article" style="background:#18181b;border-color:#3f3f46">
+      <p>Traderların piyasa takibi, teknik analiz, AI değerlendirmesi, journal kayıtları, eğitim içerikleri ve kişisel gelişim verilerini tek yerde kullanabileceği bir çalışma alanı oluşturuyorum.</p>
+      <p>PBM içerisinde canlı piyasa ekranları, TradingView grafikleri, teknik gösterge motoru, AI analizleri, Social, Journal, Payout Tracker, Education, Indicators ve kullanıcının kendi verisinden öğrenmeye hazırlanan PBM Brain bulunuyor.</p>
+      <p>Amacım kullanıcıya yalnızca bir yön tahmini sunmak değil; aldığı kararları kaydedebildiği, sonuçlarını ölçebildiği ve zamanla kendi işlem davranışını daha iyi anlayabildiği bir sistem geliştirmek.</p>
+      <p>Sistem şu anda sınırlı kullanıcılarla test edilmeye hazırlanıyor. Geliştirme sürecini ve yeni özellikleri burada paylaşmaya devam edeceğim.</p>
+    </div>
+    <div class="divider"></div>
+    <p><strong>Önerilen başlık:</strong><br />PBM: Piyasa analizinden kişisel trading gelişimine uzanan tek çalışma alanı</p>
+    <p><strong>Önerilen etiketler:</strong><br />#Trading #Fintech #ArtificialIntelligence #MachineLearning #PBM</p>
+    <div class="footer-note">pbmdesk.pbmsolutions.workers.dev</div>
+    <div class="page-no">07</div>
+  </section>
+</body>
+</html>
